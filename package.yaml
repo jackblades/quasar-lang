@@ -27,6 +27,14 @@ dependencies:
 - bytestring
 - parsec
 - parsers
+# - compilation  -- needs to implement Applicative
+- bound
+- unification-fd
+# - epic  # compile to C
+- dhall
+- staticanalysis
+- hoopl         # dataflow optimization
+# - maxsharing
 
 library:
   source-dirs: src

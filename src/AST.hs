@@ -1,42 +1,58 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+
 module AST where
 
 --
 import           Data.ByteString (ByteString)
+import           Data.Map        (Map)
 import           Data.Text       (Text)
 
-data Label
-data Argname
-data Operator
+newtype Label = Label Text
+newtype Argname = Argname Text
+newtype Operator = Operator Text
 data Pattern
 data Language  -- parse :: Parser Ast, build :: ParserT IO QuasarAST
 
 data Primitive
-    = BOOL          Bool
-    | INT           Int
-    | FLOAT         Float
-    | DOUBLE        Double
+    = BOOL       Bool
+    | INT        Int
+    | FLOAT      Float
+    | DOUBLE     Double
     --
-    | CHAR          Char                                                -- 'c'
-    | STRING        Text                                                -- "string"             unicode
-    | BYTESTRING    ByteString                                          -- b"string"            bytestring
-    | RAWSTRING     (Either ByteString Text)                            -- r"xx" r'xx' br'xx'   only escape \" or \'
+    | CHAR       Char                                     -- 'c'
+    | STRING     Text                                     -- "string"             unicode
+    | BYTESTRING ByteString                               -- b"string"            bytestring
+    | RAWSTRING  (Either ByteString Text)                 -- r"xx" r'xx' br'xx'   only escape \" or \'
     --
-    | SYMBOL        Text                                                -- :sym
-    | CODE          Language              Text                          -- java #{ System.out.println("hello world"); }
+    | SYMBOL     Text                                     -- :sym
 
-data AppArgs a
-    = One a
-    | Two a a
-    | Many [(Argname, a)]
+--
+data AppArgs n a
+    = OneArg  a
+    | TwoArg  a a
+    | ManyArgs (Map n a)
+
+data OneOrBoth a b
+    = OneL   a
+    | OneR   b
+    | BothLR a b
 
 data Complex a
-    = Var           Argname                a
+    = Var           Argname                 a
     | MultiIf       [(a, a)]                                            -- if  condition -> a
-    | Record        [(Label, a)]           a                            -- { x=2, ... | a }
+    | Record        (Map Label a)           a                           -- { x=2, y | a } => y=y
     | Case a        [(Pattern, a)]                                      -- x | pattern   -> a; _ -> a
-    | Lambda        [Argname]              a                            -- \x : Int, y -> x + y  (single product arg)
-    | App           a                      (AppArgs a)                  -- f x; f x y; f x=1, y=2, z=3
-    --  ??
+    | Lambda        [Argname]               a                           -- \x : Int, y -> x + y  (single product arg)
+    | App           a                       (AppArgs Argname a)         -- f x; f x y; f x=1, y=2, z=3; macro application also
+    | Try           a                       (OneOrBoth [a] a)           -- try (OneOrBoth [catch] finally)
+    --
+    | QMap          (Map a a)                                           -- m{ 'a'=32 }
+    | QList         [a]                                                 -- l[1,2,3]
+    --
+    | QUOTE         a                                                   -- %(expr) = AST of expr
+    | SPLICE        a                                                   -- $(EXPR) = value of expr (inside a macro)
+    | Defmacro      [Argname]               a                           -- x = macro x y -> a; x :: AST -> AST -> AST
+    --
     | Namespace     [a]                                                 -- ns a.b.x; namespaces define scope
 
 -- sugar and stuff
@@ -49,28 +65,78 @@ data OpSectionType
     = LeftSection
     | RightSection
 
-data Syntax a
-    = InfixApp      a                       a           a               -- x + y; x .then y; x .(f t) y
-    | OpSection     OpSectionType           Operator    a               -- \x -> (x op a) or (a op x)
+data Fixity
+    = InfixL Int
+    | InfixR Int
+
+data Syntax a t
+    = FixityDecl    Text                    Fixity                      -- haskell like infixl and infixr
+    | InfixApp      a                       a           a               -- x + y; x .then y; x .(f t) y
+    | OpSection     OpSectionType           Operator    a               -- (op a) x = x op a; a op x = (a op x)
     | LambdaCase    [(Pattern, a)]                                      -- \case pattern -> a
     | IfThenElse    a                       a           a               -- if a then a else a
+    | Where         a                       a                           -- f = a where { x = ... }; x should be accessible
+    --
+    | Typed         a                       t                           -- a : Type
     --
     | Do            [Dosyntax a]                                        -- do monadicExpr
     | MonadComp     a                       [a]                         -- [x+y | x <- xs, y <- ys, x < y]
+    --
+    | SyntaxMacro   [Argname]               a                           -- x = syntaxmacro ...; x :: Syntax -> Syntax
+    | CODE          Language                Text                        -- java #{ System.out.println("hello world"); }
+
+--
+newtype TParam = TParam Text
+newtype TCon = TCon Text
+newtype TArg = TArg Text
+
+data TPrimitives
+    = TBOOL
+    | TINT
+    | TFLOAT
+    | TDOUBLE
+    --
+    | TCHAR
+    | TSTRING
+    | TBYTESTRING
+
+data TProd t
+    = TProd { _fields :: Map Argname t, _rest :: Maybe TArg }
+
+data TSum t
+    = TSum  { _products :: Map TCon t, _rest :: Maybe TCon }
+
+newtype SOP t
+    = SOP { _sop :: Either (TSum (SOP t)) (TProd (SOP t))}
+
+data TDecl t
+    = Newtype  { _tName :: Text, _tParams :: [TParam], _tExpr :: t }    -- newtype T = Text; newtype X a b = { a, b, ... }
+    | Alias    { _tName :: Text, _tParams :: [TParam], _tExpr :: t }
+    | Datatype { _tName :: Text, _tParams :: [TParam], _tExpr :: t }    -- can't have row variables in sum??
+
+type Type t = SOP t
 
 
--- ifM, do-rec, lazy, deeplazy
--- are record / local-namespace fields defined lazily? Is it ok to recurse in a field?
 
--- macros
--- typesystem
+-- ifM, do-rec
+-- are record / local-namespace fields defined lazily? Should fields be recursive?
+
+-- lazy, deeplazy
+-- idiom brackets
+-- statemachines
+-- typesystem constraints, typeclasses, forall etc
 -- typed literal expression
 -- FFI (C, java, haskell)
 
+-- Partial class
+-- lenses
+-- effects
+-- free monads
 
 -- no globals - constructors, record fields, etc
 -- record based modules, open in scope
 -- typeclasses need to be global
+-- Free should be efficient
 
 {-
 Non global Constructors
@@ -79,13 +145,11 @@ Non global Constructors
 
 Extensible Product, Open Sums
     - Field : Record :: Case : Sum
-        - f : {a, b | r}                -> {c   | r}        -- propagate fields information
-        - f : (A a | ... | R)           -> (C c | R)        -- propagate case   information
+        - f : {a , b |: r}           -> {c   |: r}        -- propagate fields information
+        - f : (A | B |: R)           -> (C c |: R)        -- propagate case   information
 
 Namespace vs Record
     - namespaces can contain data declarations and other top-level stuff (for compilation)
     - records can only contain fields data (for program logic)
 
 -}
-
-

@@ -1,0 +1,36 @@
+
+repl IDE
+_generate_ the source _for_ version control
+
+
+'>' denotes a repl prompt
+'-- ' denotes the beginning of user input in a program
+
+ns data/map/  -- tree based or tag based?
+rename y x
+    - so y and x must be denoted by internal ids and store a map : name -> id
+    - rename can just replace the key y with key x
+
+
+function add
+    > params: -- x a
+              -- y a
+              \C-d
+              add x : a 
+                  y : a
+    > body:   -- find a -> a 
+                 Prelude id :: a -> a
+                 Data.Function id :: a -> a
+                 GHC.Exts breakpoint :: a -> a
+                 ... others
+
+
+
+
+
+
+
+
+
+
+

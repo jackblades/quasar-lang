@@ -1,0 +1,33 @@
+
+
+binary-search = \ bst, x -> {
+    true;
+    -- world
+    false;
+    -| hello
+       this world |-
+    1
+}
+
+try-catch = %\ bst, x -> 
+    t: { %32 ;
+         throw: $xx } 
+    c: { true  => x - 2;
+         false => 0 }
+    f: { close f }
+
+
+match-st = // true { :xx => true }
+match-lambda = \\ { true => 1 }
+match-lambda-effects = \\ io, state { true => 1 }
+
+list-comp = +{ 
+    x <- a; 
+    y <- b; 
+    filterM (f a b); 
+    (a,b) 
+}
+
+
+
+

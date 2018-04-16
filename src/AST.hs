@@ -1,155 +1,70 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module AST where
 
 --
 import           Data.ByteString (ByteString)
 import           Data.Map        (Map)
+import           Data.IntMap     as IM
 import           Data.Text       (Text)
 
-newtype Label = Label Text
-newtype Argname = Argname Text
+type Label = Text
+type Name = [Text]
 newtype Operator = Operator Text
 data Pattern
 data Language  -- parse :: Parser Ast, build :: ParserT IO QuasarAST
 
-data Primitive
-    = BOOL       Bool
-    | INT        Int
-    | FLOAT      Float
-    | DOUBLE     Double
-    --
-    | CHAR       Char                                     -- 'c'
-    | STRING     Text                                     -- "string"             unicode
-    | BYTESTRING ByteString                               -- b"string"            bytestring
-    | RAWSTRING  (Either ByteString Text)                 -- r"xx" r'xx' br'xx'   only escape \" or \'
-    --
-    | SYMBOL     Text                                     -- :sym
-
---
 data AppArgs n a
     = OneArg  a
     | TwoArg  a a
     | ManyArgs (Map n a)
+    deriving (Show)
 
 data OneOrBoth a b
     = OneL   a
     | OneR   b
     | BothLR a b
+    deriving (Show)
 
-data Complex a
-    = Var           Argname                 a
-    | MultiIf       [(a, a)]                                            -- if  condition -> a
-    | Record        (Map Label a)           a                           -- { x=2, y | a } => y=y
-    | Case a        [(Pattern, a)]                                      -- x | pattern   -> a; _ -> a
-    | Lambda        [Argname]               a                           -- \x : Int, y -> x + y  (single product arg)
-    | App           a                       (AppArgs Argname a)         -- f x; f x y; f x=1, y=2, z=3; macro application also
-    | Try           a                       (OneOrBoth [a] a)           -- try (OneOrBoth [catch] finally)
-    --
-    | QMap          (Map a a)                                           -- m{ 'a'=32 }
-    | QList         [a]                                                 -- l[1,2,3]
-    --
-    | QUOTE         a                                                   -- %(expr) = AST of expr
-    | SPLICE        a                                                   -- $(EXPR) = value of expr (inside a macro)
-    | Defmacro      [Argname]               a                           -- x = macro x y -> a; x :: AST -> AST -> AST
-    --
-    | Namespace     [a]                                                 -- ns a.b.x; namespaces define scope
-
--- sugar and stuff
 data Dosyntax a
-    = Assign        Argname                 a                           -- x  = a
-    | MAssign       Argname                 a                           -- x <- a
+    = Assign        Label                 a                           -- x  = a
+    | MAssign       Label                 a                           -- x <- a
     | MExpr         a                                                   -- a
+    deriving (Show, Eq, Ord)
 
-data OpSectionType
-    = LeftSection
-    | RightSection
 
-data Fixity
-    = InfixL Int
-    | InfixR Int
-
-data Syntax a t
-    = FixityDecl    Text                    Fixity                      -- haskell like infixl and infixr
-    | InfixApp      a                       a           a               -- x + y; x .then y; x .(f t) y
-    | OpSection     OpSectionType           Operator    a               -- (op a) x = x op a; a op x = (a op x)
-    | LambdaCase    [(Pattern, a)]                                      -- \case pattern -> a
-    | IfThenElse    a                       a           a               -- if a then a else a
-    | Where         a                       a                           -- f = a where { x = ... }; x should be accessible
+data Expr
+    = UNIT
+    | BOOL          Bool
+    | INT           Integer
+    | DOUBLE        Double
     --
-    | Typed         a                       t                           -- a : Type
+    | CHAR          Char                                                -- 'c'
+    | STRING        Text                                                -- "string"             unicode
+    | RAWSTRING     Text                                                -- r"xx" r'xx' br'xx'   only escape \" or \'
     --
-    | Do            [Dosyntax a]                                        -- do monadicExpr
-    | MonadComp     a                       [a]                         -- [x+y | x <- xs, y <- ys, x < y]
-    --
-    | SyntaxMacro   [Argname]               a                           -- x = syntaxmacro ...; x :: Syntax -> Syntax
-    | CODE          Language                Text                        -- java #{ System.out.println("hello world"); }
+    | VAR           Name
+    | SYMBOL        Text                                                -- :sym
+    ----
+    | QList         (IntMap Expr)                                       -- l[1,2,3]
+    | QTuple        (IntMap Expr)
+    | QMap          (Map Expr Expr)                                     -- m{ 'a'=32 }
+    | Record        (Map Label Expr)
+    ----
+    | Constructor   Name
+    | Match         Expr                    [(Expr, Expr)]              -- TODO PATTERN
+    | If            [(Expr, Expr)]
+    | Lambda        [Label]                 [Name]          Expr
+    ----
+    | Apply         Expr                    Expr
+    | Block         [Dosyntax Expr]
+    | DoNotation    [Dosyntax Expr]
+    | Throw         Expr
+    | Exception     Expr                    [(Expr, Expr)]          (Maybe Expr)
+    ----
+    | QUOTE         Expr
+    | SPLICE        Expr
+    deriving (Show, Eq, Ord)
 
---
-newtype TParam = TParam Text
-newtype TCon = TCon Text
-newtype TArg = TArg Text
-
-data TPrimitives
-    = TBOOL
-    | TINT
-    | TFLOAT
-    | TDOUBLE
-    --
-    | TCHAR
-    | TSTRING
-    | TBYTESTRING
-
-data TProd t
-    = TProd { _fields :: Map Argname t, _rest :: Maybe TArg }
-
-data TSum t
-    = TSum  { _products :: Map TCon t, _rest :: Maybe TCon }
-
-newtype SOP t
-    = SOP { _sop :: Either (TSum (SOP t)) (TProd (SOP t))}
-
-data TDecl t
-    = Newtype  { _tName :: Text, _tParams :: [TParam], _tExpr :: t }    -- newtype T = Text; newtype X a b = { a, b, ... }
-    | Alias    { _tName :: Text, _tParams :: [TParam], _tExpr :: t }
-    | Datatype { _tName :: Text, _tParams :: [TParam], _tExpr :: t }    -- can't have row variables in sum??
-
-type Type t = SOP t
-
-
-
--- ifM, do-rec
--- are record / local-namespace fields defined lazily? Should fields be recursive?
-
--- lazy, deeplazy
--- idiom brackets
--- statemachines
--- typesystem constraints, typeclasses, forall etc
--- typed literal expression
--- FFI (C, java, haskell)
-
--- Partial class
--- lenses
--- effects
--- free monads
-
--- no globals - constructors, record fields, etc
--- record based modules, open in scope
--- typeclasses need to be global
--- Free should be efficient
-
-{-
-Non global Constructors
-    data E a b = L a | R b
-    x = E.L 32   : forall b. E Int b                        -- scoped constructors; works well with open sums
-
-Extensible Product, Open Sums
-    - Field : Record :: Case : Sum
-        - f : {a , b |: r}           -> {c   |: r}        -- propagate fields information
-        - f : (A | B |: R)           -> (C c |: R)        -- propagate case   information
-
-Namespace vs Record
-    - namespaces can contain data declarations and other top-level stuff (for compilation)
-    - records can only contain fields data (for program logic)
-
--}
+mapINT f (INT x) = INT (f x)

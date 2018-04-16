@@ -1,5 +1,5 @@
 -- {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FunctionalDependencies #-}
+-- {-# LANGUAGE FunctionalDependencies #-}
 
 module Parser where
 

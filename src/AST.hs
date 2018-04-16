@@ -66,5 +66,3 @@ data Expr
     | QUOTE         Expr
     | SPLICE        Expr
     deriving (Show, Eq, Ord)
-
-mapINT f (INT x) = INT (f x)

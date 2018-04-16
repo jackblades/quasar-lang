@@ -34,9 +34,9 @@ style = emptyDef
     , P.identStart     = Tpc.lower
     , P.identLetter    = Tpc.alphaNum <|> Tpc.oneOf "_-'"
     , P.opStart        = P.opLetter style
-    , P.opLetter       = Tpc.oneOf ":!#$%&*+./<=>?@\\^|-~"
+    , P.opLetter       = Tpc.oneOf ":!#$%&*+./<=>?@\\^|-~" -- TODO '`'
     , P.reservedOpNames= ["\\", "//", "\\\\", "->", "=>", "<-", "%", "$"] -- :
-    , P.reservedNames  = ["true", "false", "if", "then", "else", "match", "do", "try", "catch", "finally", "throw"]
+    , P.reservedNames  = ["true", "false", "if", "then", "else"] --, "match", "do", "try", "catch", "finally", "throw"]
     , P.caseSensitive  = True
     }
 
@@ -44,6 +44,8 @@ singleton :: Functor f => f a -> f [a]
 singleton = fmap (:[])
 
 lname = fmap T.pack $ (:) <$> P.identStart style <*> Tp.many (P.identLetter style)
+oplname = lname <|> T.pack <$> noFollowSpaceParens rawOp where
+    noFollowSpaceParens p = (lexsym "(" *> p <* char ')')
 uname = fmap T.pack $ (:) <$> Tpc.upper <*> Tp.many (P.identLetter style)
 
 qualified p = singleton p <|> ((:) <$> lname <*> dot (qualified p)) where
@@ -55,7 +57,7 @@ nonReserved f p = p >>= \name ->
         else return name
 
 --
-qualifiedName = P.lexeme lexer $ nonReserved head $ Tp.sepBy1 lname (char '.')
+qualifiedName = P.lexeme lexer $ nonReserved head $ Tp.sepBy1 oplname (char '.')
 qualifiedSymbol = P.lexeme lexer $ nonReserved head $ qualified symbol where
     symbol = T.cons <$> char ':' <*> lname
 
@@ -72,10 +74,11 @@ identifier = fmap T.pack (P.identifier lexer)
 rawString = char 'r' *> text
 symbol = T.cons <$> char ':' <*> identifier
 
-rawOp = fmap VAR $ singleton $ T.pack <$> P.operator lexer
-operator = Tp.try (char '.' *> (VAR <$>qualifiedName <|> parens expr)) <|> rawOp where
-    backQuote = (lexsym "`")
-    between p = Tp.between p p
+-- TODO (:+:) should be identifier/qualifiedName
+rawOp = P.operator lexer
+operator = Tp.try infixNonOp <|> symOp where
+    infixNonOp = char '.' *> (VAR <$> qualifiedName <|> parens expr)
+    symOp = fmap VAR $ singleton $ T.pack <$> rawOp
 
 reservedOp = P.reservedOp lexer
 binary  p assoc f = Infix (p >>= return . f) assoc
@@ -196,26 +199,24 @@ reservedNamesExpr = match
     <|> Tp.try exn          <|> throw               <|> Tp.try do_not
     <|> quote               <|> splice
 
-compundExpr = list          <|> tuple 
+compoundExpr = list         <|> tuple 
     <|> Tp.try mapL         <|> Tp.try record
 
 term2 = Tp.try reservedNamesExpr
     <|> Tp.try primitive
-    <|> Tp.try compundExpr
+    <|> Tp.try compoundExpr
     <|> block
     <|> constructor 
     <|> parens expr
 
 term  = Tp.try application <|> term2
 
+-- TODO generate this from source
 optable = [[binary operator AssocLeft
     (\op x y -> Apply op . QTuple $ IM.fromList [(0,x), (1,y)])]]
 
 expr = buildExpressionParser optable term
    -- <?> "expression"
-
-
-
 
 -- testing
 assign2 = (,) 
@@ -234,10 +235,11 @@ parseFromFile p fname
 -- do notation
 -- exceptions
 -- quote, unquote
+-- infix operators
 -- 
+-- operators sections
 -- typesystem, lens stuff
 -- macros
--- infix operators, sections
 -- syntax-macro
 -- ffi-code
 

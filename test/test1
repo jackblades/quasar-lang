@@ -25,6 +25,7 @@ list-comp = +{
     x <- a; 
     y <- b; 
     filterM (f a b); 
+    filterM (a < b); 
     (a,b) 
 }
 

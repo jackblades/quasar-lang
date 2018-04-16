@@ -1,13 +1,18 @@
 module Main where
 
-import           Parser
-import           Text.Parsec
+import qualified Text.Parsec.Token as P
+import qualified Text.Parsec as Tp
+import Lexer
+import Parser
 
 main :: IO ()
-main = play "32 + 44"
+main = parseFromFile (Tp.many1 assign2) "/Users/singhpdz/quasar/test/test1"
 
-play :: String -> IO ()
-play inp = case parse expr "" inp of
-             { Left err  -> print err
-             ; Right ans -> print ans
-             }
+assign2 = (,) 
+    <$> identifier
+    <*> (lexsym "=" *> expr)
+parseFromFile p fname
+     = do input <- readFile fname
+          print $ Tp.parse (P.whiteSpace lexer *> p) fname input
+          return ()
+

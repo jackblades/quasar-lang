@@ -1,5 +1,3 @@
--- {-# LANGUAGE OverloadedStrings #-}
--- {-# LANGUAGE FunctionalDependencies #-}
 
 module Parser where
 
@@ -23,6 +21,12 @@ import           Debug.Trace (trace)
 operator = Tp.try infixNonOp <|> symOp where
     infixNonOp = char '.' *> (VAR <$> qualifiedName <|> parens expr)
     symOp = fmap VAR $ singleton $ T.pack <$> rawOp
+
+opSection = parens (lsec <|> rsec) where
+    lsec = lsecf <$> operator <*> term2
+    rsec = rsecf <$> term2 <*> operator
+    lsecf op y = Lambda [T.pack "x"] [] (Apply op (QTuple (IM.fromList [(0,VAR [T.pack "x"]),(1,y)])))
+    rsecf x op = Lambda [T.pack "y"] [] (Apply op (QTuple (IM.fromList [(0,x),(1,VAR [T.pack "y"])])))
 
 --
 list = QList . IM.fromList . zip [0..] <$> (brackets $ commaSep expr) where
@@ -70,12 +74,12 @@ lambda = Lambda <$> (lexsym "\\" *> args) <*> effects <*> (arrow *> body) where
     body = expr
 
 lambdaCase = lexsym "\\\\"
-     *> (Lambda [T.pack "x"] <$> effects  -- TODO fix names issue
+     *> (Lambda [T.pack "x"] <$> effects
     <*> (Match (VAR [T.pack "x"]) <$> cases)) where
     effects = (commaSep (singleton identifier)) <|> pure [] 
 
 application = Apply <$> name <*> args where
-    name = Tp.try (VAR <$> qualifiedName) <|> Tp.try constructor <|> parens expr
+    name = Tp.try (VAR <$> qualifiedName) <|> Tp.try constructor <|> Tp.try opSection <|> parens expr
     args = do 
         arg1 <- term2
         arg2 <- Tp.try term2 <|> pure UNIT
@@ -95,10 +99,10 @@ do_not = char '+' *> braces (DoNotation <$> semiSep1 st) where
         exp    = MExpr   <$> expr
 
 throw = Throw <$> (lexsym "throw:" *> expr)
-exn = Exception <$> (lexsym "t:"     *> expr)
-                <*> (lexsym "c:"   *> cases)
+exn = Exception <$> (lexsym "t:" *> expr)
+                <*> (lexsym "c:" *> cases)
                 <*> (lexsym "f:" *> fmap Just expr 
-                                     <|> pure Nothing)
+                                <|> pure Nothing)
 
 --
 quote = lexsym "%" *> (QUOTE <$> expr)
@@ -112,13 +116,13 @@ reservedNamesExpr = match
     <|> quote               <|> splice
 
 compoundExpr = list         <|> tuple 
-    <|> Tp.try mapL         <|> Tp.try record
+    <|> Tp.try mapL         <|> Tp.try record       <|> block
 
 term2 = Tp.try reservedNamesExpr
     <|> Tp.try primitive
     <|> Tp.try compoundExpr
-    <|> block
     <|> constructor 
+    <|> Tp.try opSection
     <|> parens expr
 
 term  = Tp.try application <|> term2
@@ -139,9 +143,8 @@ expr = buildExpressionParser optable term
 -- do notation
 -- exceptions
 -- quote, unquote
--- infix operators
+-- infix operators, operators sections
 -- 
--- operators sections
 -- typesystem, lens stuff
 -- macros
 -- syntax-macro

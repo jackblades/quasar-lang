@@ -107,11 +107,21 @@ exn = Exception <$> (lexsym "t:" *> expr)
 --
 quote = lexsym "%" *> (QUOTE <$> expr)
 splice = lexsym "$" *> (SPLICE <$> expr)
+defmacro = Macro <$> (lexsym "\\%" *> args) <*> effects <*> (arrow *> body) where
+    args = commaSep1 identifier  -- TODO conver to record
+    effects = (lexsym "|" *> commaSep (singleton identifier)) <|> pure [] 
+    arrow = lexsym "->"
+    body = expr
+
+-- TODO generalized ffi not just java
+ffiJava = lexsym "java" *> (braces $ Tp.many1 $ escapedEndBrace <|> others) where
+    escapedEndBrace = Tp.try (lexsym "\\}" *> pure '}')
+    others = Tp.noneOf "}"
 
 --
 reservedNamesExpr = match 
     <|> Tp.try ifst         <|> ifte 
-    <|> Tp.try lambdaCase   <|> lambda 
+    <|> Tp.try defmacro     <|> Tp.try lambdaCase   <|> lambda 
     <|> Tp.try exn          <|> throw               <|> Tp.try do_not
     <|> quote               <|> splice
 
@@ -143,11 +153,11 @@ expr = buildExpressionParser optable term
 -- do notation
 -- exceptions
 -- quote, unquote
+-- macros
 -- infix operators, operators sections
+-- ffi-code
 -- 
 -- typesystem, lens stuff
--- macros
 -- syntax-macro
--- ffi-code
 
 -- comprehensions -- useless given do_not?

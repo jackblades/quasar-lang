@@ -65,4 +65,5 @@ data Expr
     ----
     | QUOTE         Expr
     | SPLICE        Expr
+    | Macro         [Label]                 [Name]          Expr
     deriving (Show, Eq, Ord)

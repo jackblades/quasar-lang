@@ -32,6 +32,7 @@ style = emptyDef
     , P.caseSensitive  = True
     }
 
+--
 singleton :: Functor f => f a -> f [a]
 singleton = fmap (:[])
 
@@ -66,13 +67,8 @@ identifier = fmap T.pack (P.identifier lexer)
 rawString = char 'r' *> text
 symbol = T.cons <$> char ':' <*> identifier
 
--- TODO (:+:) should be identifier/qualifiedName
 rawOp = P.operator lexer
-
-reservedOp = P.reservedOp lexer
 binary  p assoc f = Infix (p >>= return . f) assoc
-prefix  name fun       = Prefix (do{ reservedOp name; return fun })
-postfix name fun       = Postfix (do{ reservedOp name; return fun })
 
 -- TODO use 'sepEndBy'
 comma = P.comma lexer

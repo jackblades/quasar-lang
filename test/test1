@@ -1,34 +1,49 @@
 
+{
+    unit = () ;
+    t = true ;
+    f = false ;
+    d = 2.0 ;
+    i = 2 ;
+    c = 'a' ;
+    s = "hellow world\n" ;
+    r = r"hello world\n" ;  -- bad
+    sym = :sym ;
+    var = com.amazon.orca.auth ;
 
-binary-search = \ bst, x -> {
-    true;
-    -- world
-    false;
-    -| hello
-       this world |-
-    1
+    op = 1 :+: 2 ;
+    opsec = (++ 2) ;
+    opsec = (3 ++) ;
+
+    match-st = // true { :xx => true } ;
+    match-lambda = \\ { true => 1 } ;
+    match-lambda-effects = \\ io, state { true => 1 } ;
+
+    defmacro = \% a, b -> a + b ;
+    binary-search = \ bst, x -> {
+        true;
+        -- world
+        false;
+        -| hello
+        this world |-
+        1
+    } ;
+
+    try-catch = %\ bst, x -> 
+        t: { %32 ;
+            throw: $xx } 
+        c: { true  => x - 2;
+            false => 0 }
+        f: { close f } ;
+
+    list-comp = +{ 
+        x <- a; 
+        y <- b; 
+        filterM (f a b); 
+        filterM (a < b); 
+        (a,b) 
+    }
 }
-
-try-catch = %\ bst, x -> 
-    t: { %32 ;
-         throw: $xx } 
-    c: { true  => x - 2;
-         false => 0 }
-    f: { close f }
-
-
-match-st = // true { :xx => true }
-match-lambda = \\ { true => 1 }
-match-lambda-effects = \\ io, state { true => 1 }
-
-list-comp = +{ 
-    x <- a; 
-    y <- b; 
-    filterM (f a b); 
-    filterM (a < b); 
-    (a,b) 
-}
-
 
 
 

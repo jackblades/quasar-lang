@@ -82,10 +82,10 @@ application = Apply <$> name <*> args where
     name = Tp.try (VAR <$> qualifiedName) <|> Tp.try constructor <|> Tp.try opSection <|> parens expr
     args = do 
         arg1 <- term2
-        arg2 <- Tp.try term2 <|> pure UNIT
+        arg2 <- Tp.try term2 <|> pure ERROR
         return $ case arg2 of
-            UNIT -> arg1
-            _    -> QTuple $ IM.fromList $ zip [0..] [arg1, arg2]
+            ERROR -> arg1
+            _     -> QTuple $ IM.fromList $ zip [0..] [arg1, arg2]
 
 block = braces $ Block <$> semiSep st where
     st = Tp.try assign <|> exp where
@@ -159,5 +159,7 @@ expr = buildExpressionParser optable term
 -- 
 -- typesystem, lens stuff
 -- syntax-macro
+-- INFIX optable from source
+-- GENERALIZED ffi-lang
 
 -- comprehensions -- useless given do_not?

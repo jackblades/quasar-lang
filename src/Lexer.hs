@@ -93,7 +93,7 @@ primitive
     --
     <|> CHAR                    <$> (P.charLiteral lexer)
     <|> STRING                  <$> text
-    <|> RAWSTRING               <$> rawString
+    <|> RAWSTRING               <$> rawString  -- TODO competes with application
     --
     <|> SYMBOL                  <$> symbol
     <|> VAR                     <$> qualifiedName  -- TODO maybe move to expr?

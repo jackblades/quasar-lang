@@ -13,7 +13,7 @@ import qualified Data.Text as T
 import           Text.Parsec.Expr (Operator(..), Assoc(..))
 import           Data.Functor.Identity (Identity)
 
-import AST (Expr(UNIT, BOOL, INT, DOUBLE, CHAR, STRING, RAWSTRING, VAR, SYMBOL))
+import AST (Expr(UNIT, BOOL, INT, DOUBLE, CHAR, STRING, RAWSTRING, VAR, SYMBOL), Src(..))
 import           Debug.Trace (trace)
 
 lexer = P.makeTokenParser style
@@ -36,6 +36,14 @@ style = emptyDef
 singleton :: Functor f => f a -> f [a]
 singleton = fmap (:[])
 
+nonReserved f p = p >>= \name -> 
+    if T.unpack (f name) `elem` P.reservedNames style
+        then Tp.unexpected ("reserved word " ++ show name)
+        else return name
+
+src p = Src <$> Tp.getPosition <*> p <*> Tp.getPosition;
+
+--
 lname = fmap T.pack $ (:) <$> P.identStart style <*> Tp.many (P.identLetter style)
 oplname = lname <|> T.pack <$> noFollowSpaceParens rawOp where
     noFollowSpaceParens p = (lexsym "(" *> p <* char ')')
@@ -43,11 +51,6 @@ uname = fmap T.pack $ (:) <$> Tpc.upper <*> Tp.many (P.identLetter style)
 
 qualified p = singleton p <|> ((:) <$> lname <*> dot (qualified p)) where
     dot p   = char '.' *> p
-
-nonReserved f p = p >>= \name -> 
-    if T.unpack (f name) `elem` P.reservedNames style
-        then Tp.unexpected ("reserved word " ++ show name)
-        else return name
 
 --
 qualifiedName = P.lexeme lexer $ nonReserved head $ Tp.sepBy1 oplname (char '.')

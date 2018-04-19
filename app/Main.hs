@@ -1,14 +1,18 @@
 module Main where
 
 import Text.Pretty.Simple (pPrint)
+import System.Environment (getArgs)
 import qualified Text.Parsec.Token as P
 import qualified Text.Parsec as Tp
 import Lexer
 import Parser
 
 main :: IO ()
-main = parseFromFile expr "/Users/singhpdz/quasar/test/test1"
--- main = parseFromFile (Tp.many1 assign2) "/Users/singhpdz/quasar/test/test1"
+main = do
+    (file:_) <- getArgs
+    parseFromFile (src expr) file
+
+-- main = parseFromFile expr "/Users/singhpdz/quasar/test/test1"
 
 assign2 = (,) 
     <$> identifier

@@ -8,6 +8,7 @@ import           Data.ByteString (ByteString)
 import           Data.Map        (Map)
 import           Data.IntMap     as IM
 import           Data.Text       (Text)
+import           Text.Parsec     as Tp
 
 type Label = Text
 type Name = [Text]
@@ -69,3 +70,11 @@ data Expr
     --
     | ERROR
     deriving (Show, Eq, Ord)
+
+
+--
+data Src = Src 
+    { _start :: Tp.SourcePos
+    , _expr  :: Expr
+    , _end   :: Tp.SourcePos
+    } deriving (Show, Eq, Ord)

@@ -78,7 +78,7 @@ lambdaCase = lexsym "\\\\"
     <*> (Match (VAR [T.pack "x"]) <$> cases)) where
     effects = (commaSep (singleton identifier)) <|> pure [] 
 
-application = Apply <$> name <*> args where
+application = RAWSTRING <$> rawString <|> Apply <$> name <*> args where
     name = Tp.try (VAR <$> qualifiedName) <|> Tp.try constructor <|> Tp.try opSection <|> parens expr
     args = do 
         arg1 <- term2

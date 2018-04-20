@@ -2,6 +2,11 @@
 
 ns test1.fish  --
 
+import data.text ;
+import data.text as t ;
+open control.monad
+
+
 unit = () ;
 t = true ;
 f = false ;

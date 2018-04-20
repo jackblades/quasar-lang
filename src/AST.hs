@@ -68,7 +68,7 @@ data Expr
     | SPLICE        Expr
     | Macro         [Label]                 [Name]          Expr
     --
-    | ERROR
+    | ERROR         Text
     deriving (Show, Eq, Ord)
 
 

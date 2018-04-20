@@ -25,8 +25,10 @@ operator = Tp.try infixNonOp <|> symOp where
 opSection = parens (lsec <|> rsec) where
     lsec = lsecf <$> operator <*> term2
     rsec = rsecf <$> term2 <*> operator
-    lsecf op y = Lambda [T.pack "x"] [] (Apply op (QTuple (IM.fromList [(0,VAR [T.pack "x"]),(1,y)])))
-    rsecf x op = Lambda [T.pack "y"] [] (Apply op (QTuple (IM.fromList [(0,x),(1,VAR [T.pack "y"])])))
+    lsecf op y = Lambda [T.pack "x"] [] 
+        $ Apply op (QTuple (IM.fromList [(0,VAR [T.pack "x"]),(1,y)]))
+    rsecf x op = Lambda [T.pack "y"] [] 
+        $ Apply op (QTuple (IM.fromList [(0,x),(1,VAR [T.pack "y"])]))
 
 --
 list = QList . IM.fromList . zip [0..] <$> (brackets $ commaSep expr) where
@@ -82,10 +84,10 @@ application = RAWSTRING <$> rawString <|> Apply <$> name <*> args where
     name = Tp.try (VAR <$> qualifiedName) <|> Tp.try constructor <|> Tp.try opSection <|> parens expr
     args = do 
         arg1 <- term2
-        arg2 <- Tp.try term2 <|> pure ERROR
+        arg2 <- Tp.try term2 <|> pure (ERROR $ T.pack "")
         return $ case arg2 of
-            ERROR -> arg1
-            _     -> QTuple $ IM.fromList $ zip [0..] [arg1, arg2]
+            ERROR _ -> arg1
+            _       -> QTuple $ IM.fromList $ zip [0..] [arg1, arg2]
 
 block = braces $ Block <$> semiSep st where
     st = Tp.try assign <|> exp where

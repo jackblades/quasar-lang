@@ -13,6 +13,8 @@ r = r"hello world\n" ;  -- bad
 sym = :sym ;
 var = com.amazon.orca.auth ;
 
+error = ;
+
 op = 1 :+: 2 ;
 opsec = (++ 2) ;
 opsec = (3 ++) ;

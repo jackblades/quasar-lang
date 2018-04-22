@@ -27,7 +27,7 @@ style = emptyDef
     , P.identLetter    = Tpc.alphaNum <|> Tpc.oneOf "_-'"
     , P.opStart        = P.opLetter style
     , P.opLetter       = Tpc.oneOf ":!#$%&*+./<=>?@\\^|-~" -- TODO '`'
-    , P.reservedOpNames= ["\\", "//", "\\\\", "->", "=>", "<-", "%", "$"] -- :
+    , P.reservedOpNames= ["\\", "//", "\\\\", "->", "=>", "<-", "%", "$", ":"] -- :
     , P.reservedNames  = ["true", "false", "if", "then", "else"] --, "match", "do", "try", "catch", "finally", "throw"]
     , P.caseSensitive  = True
     }

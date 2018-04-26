@@ -4,7 +4,8 @@ ns test1.fish  --
 
 import data.text ;
 import data.text as t ;
-open control.monad
+open control.monad ;
+from control import applicative
 
 
 unit = () ;

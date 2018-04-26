@@ -48,33 +48,35 @@ data Expr
     | VAR           Name
     | SYMBOL        Text                                                -- :sym
     ----
-    | QList         (IntMap Expr)                                       -- l[1,2,3]
-    | QTuple        (IntMap Expr)
-    | QMap          (Map Expr Expr)                                     -- m{ 'a'=32 }
-    | Record        (Map Label Expr)
+    | QList         (IntMap FParser)                                       -- l[1,2,3]
+    | QTuple        (IntMap FParser)
+    | QMap          (Map FParser FParser)                                     -- m{ 'a'=32 }
+    | Record        (Map Label FParser)
     ----
     | Constructor   Name
-    | Match         Expr                    [(Expr, Expr)]              -- TODO PATTERN
-    | If            [(Expr, Expr)]
-    | Lambda        [Label]                 [Name]          Expr
+    | Match         FParser                    [(FParser, FParser)]              -- TODO PATTERN
+    | If            [(FParser, FParser)]
+    | Lambda        [Label]                 [Name]          FParser
     ----
-    | Apply         Expr                    Expr
-    | Block         [Dosyntax Expr]
-    | DoNotation    [Dosyntax Expr]
-    | Throw         Expr
-    | Exception     Expr                    [(Expr, Expr)]          (Maybe Expr)
+    | Apply         FParser                    FParser
+    | Block         [Dosyntax FParser]
+    | DoNotation    [Dosyntax FParser]
+    | Throw         FParser
+    | Exception     FParser                    [(FParser, FParser)]          (Maybe FParser)
     ----
-    | QUOTE         Expr
-    | SPLICE        Expr
-    | Macro         [Label]                 [Name]          Expr
+    | QUOTE         FParser
+    | SPLICE        FParser
+    | Macro         [Label]                 [Name]          FParser
     --
     | ERROR         Text
     deriving (Show, Eq, Ord)
 
 
 --
-data Src = Src 
+data Src a = Src 
     { _start :: Tp.SourcePos
-    , _expr  :: Expr
+    , _expr  :: a
     , _end   :: Tp.SourcePos
     } deriving (Show, Eq, Ord)
+
+type FParser = Src Expr

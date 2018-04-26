@@ -17,13 +17,17 @@ data ImportQ = ImportAs [T.Text] [T.Text]
 
 maybe x p = p <|> pure x
 
--- ns
+--
 importQ 
+    -- usage: open control.monad
     =   lexsym "open" *> (FromImport <$> qualifiedName <*> pure [([T.pack "*"], [])])
+    -- usage: import control.monad [as M]
     <|> ImportAs <$> (lexsym "import" *> qualifiedName) <*> (maybe [] $ as qualifiedName)
+    -- usage: from control import monad as m, applicative as a
     <|> FromImport <$> (lexsym "from" *> qualifiedName) 
-        <*> (lexsym "import" *> (maybe [] $ parens $ commaSep1 $ qnameAsQname [])) where
-    asterisk = L.singleton (L.singleton (T.pack <$> lexsym "*"))
+        <*> (lexsym "import" *> (maybe [] $ commaSep1 $ qnameAsQname [])) 
+    where --
+    asterisk = L.singleton $ L.singleton (T.pack <$> lexsym "*")
     as p = lexsym "as" *> p
     qnameAsQname x = (,) <$> qualifiedName <*> (maybe x $ as qualifiedName)
                           
@@ -31,7 +35,8 @@ importQ
 parseNs = (,,) <$> ns <*> semiSep importQ <*> semiSep assign where  -- TODO multiple imports
     ns = lexsym "ns" *> qualifiedName
     assign = Tp.try ((,) <$> identifier <*> (lexsym "="  *> expr))
-         <|> fmap ((T.pack "ERROR" ,) . ERROR) (T.pack <$> Tp.many1 (Tp.noneOf ";"))
+         <|> fmap (T.pack "ERROR" ,)
+                  (fparser $ (ERROR . T.pack) <$> Tp.many1 (Tp.noneOf ";"))
 
 parseFromFile p fname
     = do input <- readFile fname

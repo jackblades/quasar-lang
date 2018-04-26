@@ -11,9 +11,10 @@ import qualified Text.Parsec.Char as Tpc
 import qualified Text.Parsec as Tp
 import qualified Data.Text as T
 import           Text.Parsec.Expr (Operator(..), Assoc(..))
+import Text.Parsec.Pos (newPos)
 import           Data.Functor.Identity (Identity)
 
-import AST (Expr(UNIT, BOOL, INT, DOUBLE, CHAR, STRING, RAWSTRING, VAR, SYMBOL), Src(..))
+import AST (Expr(UNIT, BOOL, INT, DOUBLE, CHAR, STRING, RAWSTRING, VAR, SYMBOL), Src(..), FParser)
 import           Debug.Trace (trace)
 
 lexer = P.makeTokenParser style
@@ -41,7 +42,10 @@ nonReserved f p = p >>= \name ->
         then Tp.unexpected ("reserved word " ++ show name)
         else return name
 
-src p = Src <$> Tp.getPosition <*> p <*> Tp.getPosition;
+src p = Src <$> Tp.getPosition <*> p <*> Tp.getPosition
+spanSrc x y e = Src (_start x) e (_end y)
+noSrc e = Src noSrcPos e noSrcPos where noSrcPos = newPos "" (-1) (-1)  -- TODO
+fparser p = src p
 
 --
 lname = fmap T.pack $ (:) <$> P.identStart style <*> Tp.many (P.identLetter style)
@@ -71,7 +75,7 @@ rawString = char 'r' *> text
 symbol = T.cons <$> char ':' <*> identifier
 
 rawOp = P.operator lexer
-binary  p assoc f = Infix (p >>= return . f) assoc
+binary p assoc f = Infix (p >>= return . f) assoc
 
 -- TODO use 'sepEndBy'
 comma = P.comma lexer
@@ -87,9 +91,9 @@ brackets = P.brackets lexer
 
 -- parse primitive "" "true"
 primitive
-  :: Tp.ParsecT String u Identity Expr
-primitive
-     =  const UNIT              <$> lexsym "()"
+  :: Tp.ParsecT String u Identity FParser
+primitive = fparser
+      $ const UNIT              <$> lexsym "()"
     <|> BOOL                    <$> Tp.try bool
     <|> DOUBLE                  <$> Tp.try float
     <|> INT                     <$> int

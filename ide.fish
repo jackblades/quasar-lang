@@ -73,25 +73,6 @@ function rm-empty-parents
     end
 end
 
-function editor-args
-    set MICRO_ARGS -softwrap true
-    set MICRO_ARGS $MICRO_ARGS -autosave false
-    set MICRO_ARGS $MICRO_ARGS -colorscheme atom-dark-tc
-    set MICRO_ARGS $MICRO_ARGS -ignorecase true
-    set MICRO_ARGS $MICRO_ARGS -tabstospaces true
-    # set MICRO_ARGS $MICRO_ARGS 
-    echo $MICRO_ARGS
-end
-
-function editor-cmd
-    echo micro (editor-args)
-end
-
-function editor
-    # micro (editor-args) $argv
-    micro $argv
-end
-
 # vcs functionality
 function vcs-log
     set COMMIT_ID_MATCHER '/[^\w\d]+ ([\w\d]+) /; print "$1\n"'
@@ -125,7 +106,7 @@ function new-node
             mkdir -p (dirname $filename)
             qsr-func-template $filename >$filename
         end
-        editor $filename
+        micro $filename
     end
 end
 
@@ -145,22 +126,24 @@ function fz
     set FZF_ARGS $FZF_ARGS --preview-window=right:50%
     set FZF_ARGS $FZF_ARGS --height=80%
     set FZF_ARGS $FZF_ARGS --min-height=10
+    # set FZF_ARGS $FZF_ARGS --no-extended --exact -i
+    set FZF_ARGS $FZF_ARGS --no-sort
     set FZF_ARGS $FZF_ARGS (list-tail $argv)
 
-    tree -CDFtrf $argv[1] | drop 1 | eval "fzf $FZF_ARGS"
+    tree -CDtrf $argv[1] | drop 1 | eval "fzf $FZF_ARGS"
 end
 
-function repl
-    set NAME_EXTRACT_CMD '$(echo {} | perl -ne \\\'/]  (.*)/; print "$1"\\\')'
-    set CAT_FILE_CMD '(test -f '$NAME_EXTRACT_CMD' && cat '$NAME_EXTRACT_CMD')'
-    set CAT_DIR_CMD '(test -d '$NAME_EXTRACT_CMD' && cat '$NAME_EXTRACT_CMD'/*)'
-
-    set FZF_ARGS --prompt=\'$SRC_DIR :: \'
-    set FZF_ARGS $FZF_ARGS --preview=\'$CAT_FILE_CMD' || '$CAT_DIR_CMD' | nl'\'
-    set FZF_ARGS $FZF_ARGS --bind '\'enter:execute('(editor-cmd)' '$NAME_EXTRACT_CMD')\''
+set TREE_EXTRACT_NAME_CMD 'tree-extract-name-cmd \"\\\'{}\\\'\"'
+set IDE_ROOT_DIR '/Users/singhpdz/quasar-ide'
+function ide-file-tree
+    set FZF_ARGS $FZF_ARGS --preview="'$IDE_ROOT_DIR/ide-fzf.fish $TREE_EXTRACT_NAME_CMD preview'"
+    set FZF_ARGS $FZF_ARGS --bind "'enter:execute($IDE_ROOT_DIR/ide-fzf.fish $TREE_EXTRACT_NAME_CMD execute)'"
     set FZF_ARGS $FZF_ARGS --expect='\'ctrl-n,ctrl-d\''
+    set FZF_ARGS $FZF_ARGS $argv[2..-1]
 
-    set fzf_output (fz $SRC_DIR $FZF_ARGS)
+    set IDE_FZF_DIR $argv[1]
+
+    set fzf_output (fz $IDE_FZF_DIR $FZF_ARGS)
     and for file in $fzf_output[2..-1]
         set file (echo $file | perl -ne '/]  (.*)/; print "$1"')
         switch "$fzf_output[1]" # the key pressed
@@ -169,29 +152,20 @@ function repl
             case 'ctrl-d'
                 del-node $file
         end
+    end
+end
+
+function repl
+    switch (count $argv)
+        case 0
+            ide-file-tree $SRC_DIR --prompt="'$SRC_DIR :: '"
+        case '*'
+            ide-file-tree "$argv" --prompt="'$argv[1] :: '"
     end
 end
 
 function fman
-    set NAME_EXTRACT_CMD '$(echo {} | perl -ne \\\'/]  (.*)/; print "$1"\\\')'
-    set CAT_FILE_CMD '(test -f '$NAME_EXTRACT_CMD' && cat '$NAME_EXTRACT_CMD')'
-    set CAT_DIR_CMD '(test -d '$NAME_EXTRACT_CMD' && cat '$NAME_EXTRACT_CMD'/*)'
-
-    set FZF_ARGS --prompt=\'$PWD :: \'
-    set FZF_ARGS $FZF_ARGS --preview=\'$CAT_FILE_CMD' || '$CAT_DIR_CMD' | nl'\'
-    set FZF_ARGS $FZF_ARGS --bind '\'enter:execute('(editor-cmd)' '$NAME_EXTRACT_CMD')\''
-    set FZF_ARGS $FZF_ARGS --expect='\'ctrl-n,ctrl-d\''
-
-    set fzf_output (fz . $FZF_ARGS)
-    and for file in $fzf_output[2..-1]
-        set file (echo $file | perl -ne '/]  (.*)/; print "$1"')
-        switch "$fzf_output[1]" # the key pressed
-            case 'ctrl-n'
-                new-node $file
-            case 'ctrl-d'
-                del-node $file
-        end
-    end
+    ide-file-tree . --prompt="'$PWD :: '"
 end
 
 
@@ -231,6 +205,8 @@ function main
     ign count $argv
     or return 0
 
+    set remargs
+
     switch "$argv[1]"
         case init
             init
@@ -250,6 +226,10 @@ function main
             repl
         case quit
             exit
+
+        case __ide_execute
+            echo $argv
+            echo repl $argv[2..-1]
         case '*'
             echo ERROR No command found, argv: $argv
     end

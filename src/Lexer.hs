@@ -29,7 +29,7 @@ style = emptyDef
     , P.opStart        = P.opLetter style
     , P.opLetter       = Tpc.oneOf ":!#$%&*+./<=>?@\\^|-~" -- TODO '`'
     , P.reservedOpNames= ["\\", "//", "\\\\", "->", "=>", "<-", "%", "$", ":"] -- :
-    , P.reservedNames  = ["true", "false", "if", "then", "else"] --, "match", "do", "try", "catch", "finally", "throw"]
+    , P.reservedNames  = ["true", "false", "if", "then", "else", "match", "do", "try", "catch", "finally", "throw"]
     , P.caseSensitive  = True
     }
 
@@ -75,7 +75,7 @@ rawString = char 'r' *> text
 symbol = T.cons <$> char ':' <*> identifier
 
 rawOp = P.operator lexer
-binary p assoc f = Infix (p >>= return . f) assoc
+binary p assoc f = Infix (p >> return f) assoc
 
 -- TODO use 'sepEndBy'
 comma = P.comma lexer

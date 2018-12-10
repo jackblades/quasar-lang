@@ -1,0 +1,63 @@
+- micro editor (in mac: Prefs -> profiles -> keys -> add new -> send escape sequence -> Esc + g)
+- https://github.com/google/ci_edit
+
+file:
+    - contains deps info, and debug/release run configuration
+    - always builds cli/http target
+    - 
+
+
+package manager: nix
+    - specify the deps
+    - specify the targets
+    - specify run configurations
+
+project: exists build.nix (or default.nix)
+
+
+open ide
+    - open project/file
+    - edit src at expression granularity
+        - edit
+            - tree based
+            - autoformat -- tree based implies machine generated formatting
+            - type directed autocomplete
+                - type info
+                - autocomplete
+            - fast symbol lookup
+                - packge info
+                - type info
+                - dependent code
+            - fast documentation lookup
+            - fast example lookup
+            - rename / refactor
+            - should automatically mark dependent code as dirty and walkthrough correcting them
+        - run
+        - debug
+        - version control: every correct build should be in git
+            - versioned feature specification
+            - versioned feature implementation
+            - get implementation time statistics
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

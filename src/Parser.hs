@@ -82,7 +82,8 @@ lambdaCase = fparser $ lexsym "\\\\"
     effects = (commaSep (singleton identifier)) <|> pure [] 
     argx = noSrc (VAR [T.pack "x"])
 
-application = fparser $ RAWSTRING <$> rawString <|> Apply <$> name <*> args where
+application = fparser $ RAWSTRING <$> rawString 
+                    <|> Apply <$> name <*> args where
     name = Tp.try (fparser $ VAR <$> qualifiedName) <|> Tp.try constructor <|> Tp.try opSection <|> parens expr
     args = do 
         arg1 <- term2
@@ -103,9 +104,9 @@ do_not = fparser $ char '+' *> braces (DoNotation <$> semiSep1 st) where
         exp    = MExpr   <$> expr
 
 throw = fparser $ Throw <$> (lexsym "throw:" *> expr)
-exn = fparser $ Exception <$> (lexsym "t:" *> expr)
-                <*> (lexsym "c:" *> cases)
-                <*> (lexsym "f:" *> fmap Just expr 
+exn = fparser $ Exception <$> (lexsym "try:" *> expr)
+                <*> (lexsym "catch:" *> cases)
+                <*> (lexsym "finally:" *> fmap Just expr 
                                 <|> pure Nothing)
 
 --
@@ -133,22 +134,39 @@ compoundExpr = list         <|> tuple
     <|> Tp.try mapL         <|> Tp.try record       <|> block
 
 -- term2 :: Tp.ParsecT String u Identity FParser
-term2 = Tp.try reservedNamesExpr
-    <|> Tp.try primitive
-    <|> Tp.try compoundExpr
-    <|> constructor 
+term2 = Tp.try compoundExpr
     <|> Tp.try opSection
-    <|> parens expr
+    <|> Tp.try (parens expr)
+    <|> Tp.try reservedNamesExpr
+    <|> Tp.try constructor
+    <|> primitive
 
 term  = Tp.try application <|> term2
 
+expr = buildExpressionParser optable primitive
+
+
 -- TODO generate this from source
 -- optable :: [[Text.Parsec.Expr.Operator String u Data.Functor.Identity.Identity Src]]
-optable = [[binary operator AssocLeft
-    (\op x y -> spanSrc x y (Apply op $ spanSrc x y (QTuple $ IM.fromList [(0,x), (1,y)])))]]
+-- (\x y -> spanSrc x y (Apply "$" $ spanSrc x y (QTuple $ IM.fromList [(0,x), (1,y)])))
 
-expr = buildExpressionParser optable term
+app2 op x y = 
+    spanSrc x y 
+        $ Apply (noSrc $ VAR [T.pack op]) 
+        $ spanSrc x y (QTuple $ IM.fromList [(0,x), (1,y)])
+
+optable = 
+    [ [ binary (lexsym "<|") AssocRight (app2 "<|")
+      , binary (lexsym "|>") AssocLeft (app2 "|>")
+      ]
+    ]
    -- <?> "expression"
+
+
+
+
+
+
 
 -- primitives
 -- list, map, tuple, record, constructor
@@ -169,3 +187,4 @@ expr = buildExpressionParser optable term
 -- GENERALIZED ffi-lang
 
 -- comprehensions -- useless given do_not?
+-- coroutines -- pipes, conduit etc

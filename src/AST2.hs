@@ -1,8 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module AST where
-
+module AST2 where
 --
 import           Data.ByteString (ByteString)
 import           Data.Map        (Map)
@@ -58,7 +57,7 @@ data Expr
     | If            [(FParser, FParser)]
     | Lambda        [Label] [Name] FParser
     ----
-    | Apply         FParser                    FParser
+    | Apply         [FParser]
     | Block         [Dosyntax FParser]
     | DoNotation    [Dosyntax FParser]
     | Throw         FParser

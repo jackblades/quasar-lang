@@ -1,0 +1,10 @@
+Observe that the states in typical models talk about
+ | booleans    integers   vectors     records   caches 
+ | bits        symbols    arrays      stacks    files 
+ | characters  strings    sequences   tables    directories 
+
+These objects are discrete rather than continuous; furthermore they are built incrementally or inductively by repeatedly using primitive operations to put together smaller pieces.
+
+The functions we need to manipulate these objects do things like concatenate, reverse, sort, search, count, etc.    
+
+

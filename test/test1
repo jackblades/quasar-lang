@@ -40,11 +40,11 @@ binary-search = \ bst, x -> {
 } ;
 
 try-catch = %\ bst, x -> 
-    t: { %32 ;
-        throw: $xx } 
-    c: { true  => x - 2;
-        false => 0 }
-    f: { close f } ;
+    try:     { %32 ;
+               throw: $xx } 
+    catch:   { true  => x - 2;
+               false => 0 }
+    finally: { close f } ;
 
 list-comp = +{ 
     x <- a; 

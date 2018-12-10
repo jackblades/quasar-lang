@@ -30,12 +30,22 @@ dependencies:
 - parsers
 # - compilation  -- needs to implement Applicative
 - bound
+- prelude-extras
 - unification-fd
 # - epic  # compile to C
-- dhall
-- staticanalysis
-- hoopl         # dataflow optimization
-# - maxsharing
+- turtle
+- hedis
+
+# dev stuff
+# - intero
+# - ghc-hare
+# - haddock
+# - hindent
+# - hlint
+# - hoogle
+# - bhoogle
+# - stylish-haskell
+# - hie
 
 library:
   source-dirs: src
@@ -61,3 +71,4 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - quasar
+

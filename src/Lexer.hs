@@ -49,11 +49,18 @@ nonReserved f p = p >>= \name ->
         then Tp.unexpected ("reserved word " ++ show name)
         else return name
 
+ident = do
+    c <- P.identStart style
+    cs <- Tp.many (P.identLetter style)
+    return $ T.pack (c:cs)
+
+
 src p = Src <$> Tp.getPosition <*> p <*> Tp.getPosition
 spanSrc x y e = Src (_beg x) e (_end y)
 noSrc e = Src noSrcPos e noSrcPos where noSrcPos = newPos "" (-1) (-1)  -- TODO
 
 --
+lexeme = P.lexeme lexer
 lexsym = P.symbol lexer
 bool = (lexsym "true" *> pure True) 
    <|> (lexsym "false" *> pure False)

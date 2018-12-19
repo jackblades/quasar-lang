@@ -48,47 +48,47 @@ reader_macro = choice
     ]
     
 quote
-    = src $ fmap QQuote $ lexsym "\'" *> form
+    = src $ fmap QQuote $ string "\'" *> form
 
 backtick
-    = src $ fmap QBacktick $ lexsym "`" *> form
+    = src $ fmap QBacktick $ string "`" *> form
 
 unquote
-    = src $ fmap QUnquote $ lexsym "~" *> form
+    = src $ fmap QUnquote $ string "~" *> form
 
 unquote_splicing
-    = src $ fmap QUnquoteSplicing $ lexsym "~@" *> form
+    = src $ fmap QUnquoteSplicing $ string "~@" *> form
 
 tag
-    = lexsym "^" *> (src $ QTag <$> form <*> form)
+    = string "^" *> (src $ QTag <$> form <*> form)
 
 deref
-    = src $ fmap QDeref $ lexsym "@" *> form
+    = src $ fmap QDeref $ string "@" *> form
 
 gensym
-    = (src $ fmap QLiteral $ symbol) <* lexsym "#"
+    = (src $ fmap (QLiteral . QSymbol) $ qsymbol) <* Lexer.char '#'
 
 lambda
     -- : '#(' form* ')'
-    = lexsym "#" *> (src $ QLambda <$> brackets cforms <*> form) -- TODO
+    = string "#" *> (src $ QLambda <$> brackets cforms <*> form) -- TODO
 
 meta_data
-    = lexsym "#^" *> (src $ QMetadata <$> parseMaybe qmap <*> form)
+    = string "#^" *> (src $ QMetadata <$> parseMaybe qmap <*> form)
 
 var_quote
-    = lexsym "#\'" *> (src $ fmap QLiteral symbol)
+    = string "#\'" *> (src $ fmap QLiteral symbol)
 
 host_expr
-    = lexsym "#+" *> (src $ QHostExpr <$> form <*> form)
+    = string "#+" *> (src $ QHostExpr <$> form <*> form)
 
 discard
-    = lexsym "#_" *> (src $ fmap QDiscard $ form)
+    = string "#_" *> (src $ fmap QDiscard $ form)
 
 dispatch
-    = lexsym "#" *> (src $ QDispatch <$> (fmap symbolToText symbol) <*> form)
+    = string "#" *> (src $ QDispatch <$> (fmap symbolToText symbol) <*> form)
 
 regex
-    = lexsym "#" *> (src $ fmap QLiteral $ qstring)
+    = string "#" *> (src $ fmap QLiteral $ qstring)
 
 literal :: ParsecT String u Identity (TextExpr a)
 literal
@@ -113,20 +113,22 @@ qbool = fmap QBool bool
 
 keyword = choice [ macro_keyword, simple_keyword ]
 simple_keyword = Lexer.char ':' *> symbol
-macro_keyword = lexsym "::" *> symbol
+macro_keyword = string "::" *> symbol
 
-symbol = fmap QSymbol $ choice [ ns_symbol, simple_sym ]
+symbol = lexeme $ fmap QSymbol $ choice [ ns_symbol, simple_sym ]
 simple_sym = qsymbol
 ns_symbol = do ns <- identifier 
                Lexer.char '/' 
                sym <- qsymbol
                return $ mconcat [ns, T.pack "/", sym]
 
-qsymbol = choice [ fmap T.singleton (oneOf "./"), identifier ]
+qsymbol = choice [ fmap T.singleton (oneOf "./"), ident ] -- TODO identifier eats spaces
 param_name = fmap QParam . fmap T.pack $ 
     Lexer.char '%' *> (try num <|> lexsym "&")
     where num = (:) <$> oneOf "123456789" <*> many (oneOf "0123456789")
 
+
+-- f #{1,2,3} isn't parsing
 
 -- primitives
 -- list, map, tuple, record, constructor

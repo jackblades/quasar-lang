@@ -54,7 +54,7 @@ data Src f a
 
 type TextExpr a = Src TextAST a
 instance (Show a, Show (f (Src f a))) => Show (Src f a) where
-    show (Src b e d) = "Src { _beg = " ++ show b ++ ", _end = " ++ show d ++ ", _expr = " ++ show e
+    show (Src b e d) = show e
 
 
 

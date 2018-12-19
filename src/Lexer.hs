@@ -4,6 +4,7 @@
 module Lexer where
 
 --
+import Prelude
 import           Control.Applicative     ((<|>))
 import qualified Text.Parsec.Token as P
 import           Text.Parsec.Language (emptyDef)
@@ -14,22 +15,28 @@ import           Text.Parsec.Expr (Operator(..), Assoc(..))
 import Text.Parsec.Pos (newPos)
 import           Data.Functor.Identity (Identity)
 
-import AST (Expr(UNIT, BOOL, INT, DOUBLE, CHAR, STRING, RAWSTRING, VAR, SYMBOL), Src(..), FParser)
+import AST 
 import           Debug.Trace (trace)
+import Control.Monad (mzero)
+
+
+nums = "0123456789"
+langwords = "^`\'\"#~@:/%()[]{}"
+spcs = " \n\r\t,"
 
 lexer = P.makeTokenParser style
 style :: P.LanguageDef st
 style = emptyDef
-    { P.commentStart   = "-|"
-    , P.commentEnd     = "|-"
+    { P.commentStart   = "--|"
+    , P.commentEnd     = "|--"
     , P.commentLine    = "--"
     , P.nestedComments = True
-    , P.identStart     = Tpc.lower
-    , P.identLetter    = Tpc.alphaNum <|> Tpc.oneOf "_-'"
-    , P.opStart        = P.opLetter style
-    , P.opLetter       = Tpc.oneOf ":!#$%&*+./<=>?@\\^|-~" -- TODO '`'
-    , P.reservedOpNames= ["\\", "//", "\\\\", "->", "=>", "<-", "%", "$", ":"] -- :
-    , P.reservedNames  = ["true", "false", "if", "then", "else"] --, "match", "do", "try", "catch", "finally", "throw"]
+    , P.identStart     = Tpc.noneOf (nums ++ langwords ++ spcs)
+    , P.identLetter    = P.identStart style <|> Tpc.oneOf (nums ++ ".:")
+    , P.opStart        = mzero
+    , P.opLetter       = mzero
+    , P.reservedOpNames= [] -- :
+    , P.reservedNames  = []
     , P.caseSensitive  = True
     }
 
@@ -43,27 +50,15 @@ nonReserved f p = p >>= \name ->
         else return name
 
 src p = Src <$> Tp.getPosition <*> p <*> Tp.getPosition
-spanSrc x y e = Src (_start x) e (_end y)
+spanSrc x y e = Src (_beg x) e (_end y)
 noSrc e = Src noSrcPos e noSrcPos where noSrcPos = newPos "" (-1) (-1)  -- TODO
-fparser p = src p
-
---
-lname = fmap T.pack $ (:) <$> P.identStart style <*> Tp.many (P.identLetter style)
-oplname = lname <|> T.pack <$> noFollowSpaceParens rawOp where
-    noFollowSpaceParens p = (lexsym "(" *> p <* char ')')
-uname = fmap T.pack $ (:) <$> Tpc.upper <*> Tp.many (P.identLetter style)
-
-qualified p = singleton p <|> ((:) <$> lname <*> dot (qualified p)) where
-    dot p   = char '.' *> p
-
---
-qualifiedName = P.lexeme lexer $ nonReserved head $ Tp.sepBy1 oplname (char '.')
-qualifiedSymbol = P.lexeme lexer $ nonReserved head $ qualified symbol where
-    symbol = T.cons <$> char ':' <*> lname
 
 --
 lexsym = P.symbol lexer
-bool = (lexsym "true" *> pure True) <|> (lexsym "false" *> pure False)
+bool = (lexsym "true" *> pure True) 
+   <|> (lexsym "false" *> pure False)
+
+charLiteral = P.charLiteral lexer
 natural = P.natural lexer
 unsignedFloat = P.float lexer
 int = natural <|> (char '-' *> fmap negate natural)
@@ -78,7 +73,8 @@ rawOp = P.operator lexer
 binary p assoc f = Infix (p >>= return . f) assoc
 
 -- TODO use 'sepEndBy'
-comma = P.comma lexer
+comma = P.comma lexer *> return ()
+colon = P.colon lexer *> return ()
 commaSep = P.commaSep lexer
 commaSep1 = P.commaSep1 lexer
 semi = P.semi lexer
@@ -90,19 +86,38 @@ brackets = P.brackets lexer
 
 
 -- parse primitive "" "true"
-primitive
-  :: Tp.ParsecT String u Identity FParser
-primitive = fparser
-      $ const UNIT              <$> lexsym "()"
-    <|> BOOL                    <$> Tp.try bool
-    <|> DOUBLE                  <$> Tp.try float
-    <|> INT                     <$> int
-    --
-    <|> CHAR                    <$> (P.charLiteral lexer)
-    <|> STRING                  <$> text
-    <|> RAWSTRING               <$> rawString  -- TODO competes with application
-    --
-    <|> SYMBOL                  <$> symbol
-    <|> VAR                     <$> qualifiedName  -- TODO maybe move to expr?
+-- primitive
+--   :: Tp.ParsecT String u Identity (TextExpr a)
+-- primitive = QLiteral
+--     <|> BOOL                    <$> Tp.try bool
+--     <|> DOUBLE                  <$> Tp.try float
+--     <|> INT                     <$> int
+--     --
+--     <|> CHAR                    <$> (P.charLiteral lexer)
+--     <|> STRING                  <$> text
+--     <|> RAWSTRING               <$> rawString  -- TODO competes with application
+--     --
+--     <|> SYMBOL                  <$> symbol
+--     <|> VAR                     <$> qualifiedName  -- TODO maybe move to expr?
 
 
+-- qLiteral = src . fmap QLiteral
+-- qForm = src . fmap QForm
+-- qList = src . fmap QList
+-- qVector = src . fmap QVector
+-- qMap = src . fmap QMap
+-- qSet = src . fmap QSet
+-- qLambda = src .: fmap QLambda where (.:) = (.).(.)
+-- qMetadata = src .: fmap QMetadata where (.:) = (.).(.)
+-- qRegex = src . fmap QRegex
+-- qVarQuote = src . fmap QVarQuote
+-- qHostExpr = src .: fmap QHostExpr where (.:) = (.).(.)
+-- qTag = src .: fmap QTag
+-- qDiscard = src . fmap QDiscard
+-- qDispatch = src .: fmap QDispatch where (.:) = (.).(.)
+-- qDeref = src . fmap QDeref
+-- qQuote = src . fmap QQuote
+-- qBacktick = src . fmap QBacktick
+-- qUnquote = src . fmap QUnquote
+-- qUnquoteSplicing = src . fmap QUnquoteSplicing
+-- qGenSym = src . fmap QGenSym

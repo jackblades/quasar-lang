@@ -2,10 +2,10 @@
 module Parser where
 
 --
-import           Control.Applicative     ((<|>))
+import Prelude
 import           AST
-import           Lexer
-import qualified Text.Parsec as Tp
+import           Lexer hiding (symbol)
+import Text.Parsec hiding (choice)
 import           Text.Parsec.Expr (buildExpressionParser, Operator(..), Assoc(..))
 import qualified Data.Text as T
 
@@ -14,141 +14,119 @@ import qualified Data.IntMap as IM
 
 import           Debug.Trace (trace)
 import Data.Functor.Identity (Identity)
+import Control.Monad (mzero)
 
--- TODO make sure that full words are parsed
--- TODO ex: Tp.parse expr "" "throwx" = Throw (VAR ["x"]) which is obviosly wrong
---      or make all reserved words invalid identifiers (like throw:)
+form :: ParsecT String u Identity (TextExpr a)
+form = choice [ list, vector, qmap, reader_macro, literal ]
 
-operator = Tp.try infixNonOp <|> symOp where
-    infixNonOp = char '.' *> (fparser (VAR <$> qualifiedName) <|> parens expr)
-    symOp = fparser $ fmap VAR $ singleton $ T.pack <$> rawOp
+forms = src $ fmap QForm $ many form
+cforms = sepEndBy forms comma
+field = (,) <$> form <*> (colon *> forms)
+cfields = sepEndBy field comma
 
-opSection = parens (lsec <|> rsec) where
-    lsec = lsecf <$> operator <*> term2
-    rsec = rsecf <$> term2 <*> operator
-    lsecf op y = spanSrc op y (Lambda [T.pack "x"] [] 
-        $ spanSrc op y $ Apply op (spanSrc op y (QTuple (IM.fromList [(0, noSrc $ VAR [T.pack "x"]),(1,y)]))))
-    rsecf x op = spanSrc op x (Lambda [T.pack "y"] [] 
-        $ spanSrc op x $ Apply op (spanSrc op x (QTuple (IM.fromList [(0,x),(1, noSrc $ VAR [T.pack "y"])]))))
+list = src $ fmap QList $ parens cforms
+vector = src $ fmap QVector $ brackets cforms
+qmap = src $ fmap QMap $ braces cfields
+set = src $ fmap QSet $ between (lexsym "#{") (lexsym "}") cforms
 
---
-list = fparser $ QList . IM.fromList . zip [0..] <$> (brackets $ commaSep expr)
-
-tuple = fparser $ QTuple . IM.fromList . zip [0..] 
-    <$> (parens $ (:) <$> (expr <* comma) 
-                      <*> (commaSep1 expr <|> pure []))
-    -- TODO convert to record
-
-mapL = fparser $ QMap . M.fromList <$> (braces $ commaSep $ assign) where
-    assign = (,) 
-         <$> expr 
-         <*> (lexsym ":" *> expr)
-
-record = fparser $ Record . M.fromList <$> (braces $ commaSep $ assign) where
-    assign = (,) 
-         <$> identifier
-         <*> (lexsym "=" *> expr)
-    -- TODO record accessors, update etc
-
---
-constructor = fparser $ Constructor <$> qualified uname
-match = fparser $ Match <$> (lexsym "//" *> expr) <*> cases
-pattern = primitive  -- TODO change to actual patterns
-cases = braces (semiSep1 cs) where
-    cs = (,) <$> pattern <*> (arrow *> expr) where
-        arrow = lexsym "=>"    
-
---
-ifst = fparser $ If <$> (lexsym "if" *> braces conditions) where
-    conditions = semiSep1 condition
-    condition  = (,) <$> expr <*> (arrow *> expr) where
-        arrow = lexsym "=>"        
+reader_macro = choice
+    [ lambda
+    , meta_data
+    , regex
+    , var_quote
+    , host_expr
+    , set
+    , tag
+    , discard
+    , dispatch
+    , deref
+    , quote
+    , backtick
+    , unquote
+    , unquote_splicing
+    , gensym
+    ]
     
-ifte =  fparser $ (\ c t f -> If [(c, t), (elseSymbol, f)])
-    <$> (lexsym "if"   *> expr) 
-    <*> (lexsym "then" *> expr) 
-    <*> (lexsym "else" *> expr)
-    <*  lexsym ";" where
-        elseSymbol = noSrc (SYMBOL $ T.pack "else")
+quote
+    = src $ fmap QQuote $ lexsym "\'" *> form
 
-lambda = fparser $ Lambda <$> (lexsym "\\" *> args) <*> effects <*> (arrow *> body) where
-    args = commaSep1 identifier  -- TODO conver to record
-    effects = (lexsym "|" *> commaSep (singleton identifier)) <|> pure [] 
-    arrow = lexsym "->"
-    body = expr
+backtick
+    = src $ fmap QBacktick $ lexsym "`" *> form
 
-lambdaCase = fparser $ lexsym "\\\\"
-     *> (Lambda [T.pack "x"] <$> effects <*> fparser (Match argx <$> cases)) where
-    effects = (commaSep (singleton identifier)) <|> pure [] 
-    argx = noSrc (VAR [T.pack "x"])
+unquote
+    = src $ fmap QUnquote $ lexsym "~" *> form
 
-application = fparser $ RAWSTRING <$> rawString <|> Apply <$> name <*> args where
-    name = Tp.try (fparser $ VAR <$> qualifiedName) <|> Tp.try constructor <|> Tp.try opSection <|> parens expr
-    args = do 
-        arg1 <- term2
-        arg2 <- Tp.try term2 <|> pure (noSrc $ ERROR $ T.pack "")
-        return $ case _expr arg2 of
-            ERROR _ -> arg1
-            _       -> spanSrc arg1 arg2 $ QTuple (IM.fromList $ zip [0..] [arg1, arg2])
+unquote_splicing
+    = src $ fmap QUnquoteSplicing $ lexsym "~@" *> form
 
-block = fparser $ braces (Block <$> semiSep st) where
-    st = Tp.try assign <|> exp where
-        assign = Assign  <$> identifier <*> (lexsym "="  *> expr)
-        exp    = MExpr   <$> expr
+tag
+    = lexsym "^" *> (src $ QTag <$> form <*> form)
 
-do_not = fparser $ char '+' *> braces (DoNotation <$> semiSep1 st) where
-    st = Tp.try assign <|> Tp.try effect <|> exp where
-        assign = Assign  <$> identifier <*> (lexsym "="  *> expr)
-        effect = MAssign <$> identifier <*> (lexsym "<-" *> expr)
-        exp    = MExpr   <$> expr
+deref
+    = src $ fmap QDeref $ lexsym "@" *> form
 
-throw = fparser $ Throw <$> (lexsym "throw:" *> expr)
-exn = fparser $ Exception <$> (lexsym "t:" *> expr)
-                <*> (lexsym "c:" *> cases)
-                <*> (lexsym "f:" *> fmap Just expr 
-                                <|> pure Nothing)
+gensym
+    = (src $ fmap QLiteral $ symbol) <* lexsym "#"
 
---
-quote = fparser $ lexsym "%" *> (QUOTE <$> expr)
-splice = fparser $ lexsym "$" *> (SPLICE <$> expr)
-defmacro = fparser $ Macro <$> (lexsym "\\%" *> args) <*> effects <*> (arrow *> body) where
-    args = commaSep1 identifier  -- TODO conver to record
-    effects = (lexsym "|" *> commaSep (singleton identifier)) <|> pure [] 
-    arrow = lexsym "->"
-    body = expr
+lambda
+    -- : '#(' form* ')'
+    = lexsym "#" *> (src $ QLambda <$> brackets cforms <*> form) -- TODO
 
--- TODO generalized ffi not just java
-ffiJava = lexsym "java" *> (braces $ Tp.many1 $ escapedEndBrace <|> others) where
-    escapedEndBrace = Tp.try (lexsym "\\}" *> pure '}')
-    others = Tp.noneOf "}"
+meta_data
+    = lexsym "#^" *> (src $ QMetadata <$> parseMaybe qmap <*> form)
 
---
-reservedNamesExpr = match 
-    <|> Tp.try ifst         <|> ifte 
-    <|> Tp.try defmacro     <|> Tp.try lambdaCase   <|> lambda 
-    <|> Tp.try exn          <|> throw               <|> Tp.try do_not
-    <|> quote               <|> splice
+var_quote
+    = lexsym "#\'" *> (src $ fmap QLiteral symbol)
 
-compoundExpr = list         <|> tuple 
-    <|> Tp.try mapL         <|> Tp.try record       <|> block
+host_expr
+    = lexsym "#+" *> (src $ QHostExpr <$> form <*> form)
 
--- term2 :: Tp.ParsecT String u Identity FParser
-term2 = Tp.try reservedNamesExpr
-    <|> Tp.try primitive
-    <|> Tp.try compoundExpr
-    <|> constructor 
-    <|> Tp.try opSection
-    <|> parens expr
+discard
+    = lexsym "#_" *> (src $ fmap QDiscard $ form)
 
-term  = Tp.try application <|> term2
+dispatch
+    = lexsym "#" *> (src $ QDispatch <$> (fmap symbolToText symbol) <*> form)
 
--- TODO generate this from source
--- optable :: [[Text.Parsec.Expr.Operator String u Data.Functor.Identity.Identity Src]]
-optable = [[binary operator AssocLeft
-    (\op x y -> spanSrc x y (Apply op $ spanSrc x y (QTuple $ IM.fromList [(0,x), (1,y)])))]]
+regex
+    = lexsym "#" *> (src $ fmap QLiteral $ qstring)
 
-expr = buildExpressionParser optable term
-   -- <?> "expression"
+literal :: ParsecT String u Identity (TextExpr a)
+literal
+    = src $ fmap QLiteral $ choice
+        [ qstring
+        , qfloat
+        , qint
+        , qchar
+        , nil
+        , qbool
+        , keyword
+        , symbol
+        , param_name
+        ]
+
+qstring = fmap QString text
+qint = fmap (QInt . fromInteger) int
+qfloat = fmap QFloat float 
+qchar = fmap QChar charLiteral
+nil = lexsym "nil" *> return QNil
+qbool = fmap QBool bool
+
+keyword = choice [ macro_keyword, simple_keyword ]
+simple_keyword = Lexer.char ':' *> symbol
+macro_keyword = lexsym "::" *> symbol
+
+symbol = fmap QSymbol $ choice [ ns_symbol, simple_sym ]
+simple_sym = qsymbol
+ns_symbol = do ns <- identifier 
+               Lexer.char '/' 
+               sym <- qsymbol
+               return $ mconcat [ns, T.pack "/", sym]
+
+qsymbol = choice [ fmap T.singleton (oneOf "./"), identifier ]
+param_name = fmap QParam . fmap T.pack $ 
+    Lexer.char '%' *> (try num <|> lexsym "&")
+    where num = (:) <$> oneOf "123456789" <*> many (oneOf "0123456789")
+
 
 -- primitives
 -- list, map, tuple, record, constructor
@@ -169,3 +147,9 @@ expr = buildExpressionParser optable term
 -- GENERALIZED ffi-lang
 
 -- comprehensions -- useless given do_not?
+
+
+--
+choice ps = foldr (<|>) mzero $ fmap try ps
+parseMaybe p = try (fmap Just p) <|> return Nothing
+symbolToText (QSymbol s) = s

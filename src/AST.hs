@@ -1,82 +1,61 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module AST where
 
 --
+import           Prelude         (Char, Bool, Int, Double, Maybe, Show, show, Functor, (++))
 import           Data.ByteString (ByteString)
 import           Data.Map        (Map)
 import           Data.IntMap     as IM
 import           Data.Text       (Text)
 import           Text.Parsec     as Tp
 
-type Label = Text
-type Name = [Text]
-newtype Operator = Operator Text
-data Pattern
-data Language  -- parse :: Parser Ast, build :: ParserT IO QuasarAST
-
-data AppArgs n a
-    = OneArg  a
-    | TwoArg  a a
-    | ManyArgs (Map n a)
+data Literal
+    = QString                   Text
+    | QInt                      Int
+    | QFloat                    Double
+    | QChar                     Char
+    | QNil                      
+    | QBool                     Bool
+    | QKeyword                  Text
+    | QSymbol                   Text
+    | QParam                    Text
     deriving (Show)
 
-data OneOrBoth a b
-    = OneL   a
-    | OneR   b
-    | BothLR a b
-    deriving (Show)
+data TextAST a
+    = QLiteral                  Literal
+    | QForm                     [a]    
+    | QList                     [a]
+    | QVector                   [a]
+    | QMap                      [(a, a)]
+    | QSet                      [a]
+    | QLambda                   [a] a
+    | QMetadata                 (Maybe a) a
+    | QRegex                    Text
+    | QVarQuote                 Text
+    | QHostExpr                 a a
+    | QTag                      a a
+    | QDiscard                  a
+    | QDispatch                 Text a
+    | QDeref                    a
+    | QQuote                    a
+    | QBacktick                 a
+    | QUnquote                  a
+    | QUnquoteSplicing          a
+    | QGenSym                   Text
+    deriving (Show, Functor)
 
-data Dosyntax a
-    = Assign        Label                 a                           -- x  = a
-    | MAssign       Label                 a                           -- x <- a
-    | MExpr         a                                                   -- a
-    deriving (Show, Eq, Ord)
+data Src f a
+    = Src { _beg :: SourcePos, _expr :: f (Src f a), _end :: SourcePos }
+    deriving (Functor)
 
-
-data Expr
-    = UNIT
-    | BOOL          Bool
-    | INT           Integer
-    | DOUBLE        Double
-    --
-    | CHAR          Char                                                -- 'c'
-    | STRING        Text                                                -- "string"             unicode
-    | RAWSTRING     Text                                                -- r"xx" r'xx' br'xx'   only escape \" or \'
-    --
-    | VAR           Name
-    | SYMBOL        Text                                                -- :sym
-    ----
-    | QList         (IntMap FParser)                                       -- l[1,2,3]
-    | QTuple        (IntMap FParser)
-    | QMap          (Map FParser FParser)                                     -- m{ 'a'=32 }
-    | Record        (Map Label FParser)
-    ----
-    | Constructor   Name
-    | Match         FParser                    [(FParser, FParser)]              -- TODO PATTERN
-    | If            [(FParser, FParser)]
-    | Lambda        [Label]                 [Name]          FParser
-    ----
-    | Apply         FParser                    FParser
-    | Block         [Dosyntax FParser]
-    | DoNotation    [Dosyntax FParser]
-    | Throw         FParser
-    | Exception     FParser                    [(FParser, FParser)]          (Maybe FParser)
-    ----
-    | QUOTE         FParser
-    | SPLICE        FParser
-    | Macro         [Label]                 [Name]          FParser
-    --
-    | ERROR         Text
-    deriving (Show, Eq, Ord)
+type TextExpr a = Src TextAST a
+instance (Show a, Show (f (Src f a))) => Show (Src f a) where
+    show (Src b e d) = "Src { _beg = " ++ show b ++ ", _end = " ++ show d ++ ", _expr = " ++ show e
 
 
---
-data Src a = Src 
-    { _start :: Tp.SourcePos
-    , _expr  :: a
-    , _end   :: Tp.SourcePos
-    } deriving (Show, Eq, Ord)
 
-type FParser = Src Expr
+

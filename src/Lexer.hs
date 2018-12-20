@@ -86,6 +86,7 @@ binary p assoc f = Infix (p >> return f) assoc
 --
 comma = P.comma lexer *> return ()
 colon = P.colon lexer *> return ()
+equalP = lexsym "="
 commaSep = P.commaSep lexer
 commaSep1 = P.commaSep1 lexer
 semi = P.semi lexer

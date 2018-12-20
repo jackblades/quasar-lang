@@ -1,6 +1,8 @@
 
 module Parser where
 
+-- TODO pPrint $ parse form "" "#\"ajitsingh\\c\""
+
 --
 import Prelude
 import           AST
@@ -15,9 +17,21 @@ import qualified Data.IntMap as IM
 import           Debug.Trace (trace)
 import Data.Functor.Identity (Identity)
 import Control.Monad (mzero)
+import Text.Pretty.Simple (pPrint)
+import Text.Parsec.ByteString (parseFromFile)
 
+
+noSrcOp = noSrc . QLiteral . QSymbol . T.pack
+opAST op = \a b -> 
+    spanSrc a b $ QForm [noSrcOp op, a, b]
+
+--
 form :: ParsecT String u Identity (TextExpr a)
-form = choice [ list, vector, qmap, reader_macro, literal ]
+form = buildExpressionParser optable terms1 where
+    terms1  = src $ fmap QForm $ many1 term
+    optable = [[ binary (lexsym "$") AssocRight $ opAST "$" ]]
+
+term    = choice [ list, vector, qmap, reader_macro, literal ]
 
 forms = src $ fmap QForm $ many form
 cforms = sepEndBy forms comma
@@ -49,41 +63,41 @@ reader_macro = choice
     ]
     
 quote
-    = src $ fmap QQuote $ string "\'" *> form
+    = src $ fmap QQuote $ string "\\" *> term
 
 backtick
-    = src $ fmap QBacktick $ string "`" *> form
+    = src $ fmap QBacktick $ string "`" *> term
 
 unquote
-    = src $ fmap QUnquote $ string "~" *> form
+    = src $ fmap QUnquote $ string "~" *> term
 
 unquote_splicing
-    = src $ fmap QUnquoteSplicing $ string "~@" *> form
+    = src $ fmap QUnquoteSplicing $ string "~@" *> term
 
 tag
-    = string "^" *> (src $ QTag <$> form <*> form)
+    = string "^" *> (src $ QTag <$> term <*> form)
 
 deref
-    = src $ fmap QDeref $ string "@" *> form
+    = src $ fmap QDeref $ string "@" *> term
 
 gensym
     = (src $ fmap (QLiteral . QSymbol) $ qsymbol) <* Lexer.char '#'
 
 lambda
     -- : '#(' form* ')'
-    = string "#" *> (src $ QLambda <$> brackets cforms <*> form) -- TODO
+    = string "#" *> (src $ QLambda <$> brackets cforms <*> term) -- TODO
 
 meta_data
-    = string "#^" *> (src $ QMetadata <$> parseMaybe qmap <*> form)
+    = string "#^" *> (src $ QMetadata <$> parseMaybe qmap <*> term)
 
 var_quote
-    = string "#\'" *> (src $ fmap QLiteral symbol)
+    = string "#\\" *> (src $ fmap QLiteral symbol)
 
 host_expr
-    = string "#+" *> (src $ QHostExpr <$> form <*> form)
+    = string "#+" *> (src $ QHostExpr <$> term <*> form)
 
 discard
-    = string "#_" *> (src $ fmap QDiscard $ form)
+    = string "#_" *> (src $ fmap QDiscard $ term)
 
 dispatch
     = string "#" *> (src $ QDispatch <$> (fmap symbolToText symbol) <*> form)
@@ -108,7 +122,8 @@ literal
 qstring = fmap QString text
 qint = fmap (QInt . fromInteger) int
 qfloat = fmap QFloat float 
-qchar = Lexer.char '\\' *> fmap QChar anyChar
+-- qchar = Lexer.char '\\' *> fmap QChar anyChar
+qchar = fmap QChar charLiteral 
 nil = lexsym "nil" *> return QNil
 qbool = fmap QBool bool
 
@@ -157,3 +172,7 @@ param_name = fmap QParam . fmap T.pack $
 choice ps = foldr (<|>) mzero $ fmap try ps
 parseMaybe p = try (fmap Just p) <|> return Nothing
 symbolToText (QSymbol s) = s
+parseFile p fname
+    = do input <- readFile fname
+         let o = parse (whitespace *> p <* whitespace) fname input
+         pPrint o

@@ -21,7 +21,7 @@ import Control.Monad (mzero)
 
 
 nums = "0123456789"
-langwords = "^`\'\"#~@:/%()[]{}"
+langwords = "^`\'\"#~@:/%()[]{}$"  -- '\\'
 spcs = " \n\r\t,"
 
 lexer = P.makeTokenParser style
@@ -35,7 +35,7 @@ style = emptyDef
     , P.identLetter    = P.identStart style <|> Tpc.oneOf (nums ++ ".:")
     , P.opStart        = mzero
     , P.opLetter       = mzero
-    , P.reservedOpNames= [] -- :
+    , P.reservedOpNames= []
     , P.reservedNames  = []
     , P.caseSensitive  = True
     }
@@ -65,6 +65,7 @@ lexsym = P.symbol lexer
 bool = (lexsym "true" *> pure True) 
    <|> (lexsym "false" *> pure False)
 
+whitespace = P.whiteSpace lexer
 charLiteral = P.charLiteral lexer
 natural = P.natural lexer
 unsignedFloat = P.float lexer
@@ -77,7 +78,7 @@ rawString = char 'r' *> text
 symbol = T.cons <$> char ':' <*> identifier
 
 rawOp = P.operator lexer
-binary p assoc f = Infix (p >>= return . f) assoc
+binary p assoc f = Infix (p >> return f) assoc
 
 -- TODO use 'sepEndBy'
 comma = P.comma lexer *> return ()

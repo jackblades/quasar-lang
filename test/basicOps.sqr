@@ -1,0 +1,13 @@
+
+
+defn markov-data [text] =
+    apply merge-with concat $ maps #{ -2 } #filter where
+        :sentences (~@@~`clojure.string/split \text #"\\.'a'" "hello")
+        :maps      (mapcat make-markov-map sentences #[x y]filter)
+          
+
+
+
+
+
+

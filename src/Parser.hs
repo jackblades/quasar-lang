@@ -31,6 +31,7 @@ form = buildExpressionParser optable terms1 where
     terms1  = src $ fmap QForm $ many1 term
     optable = [ [ binary (lexsym "$") AssocRight $ opAST "$" ]
               , [ binary (lexsym "where") AssocRight $ opAST "where" ]
+              , [ binary (lexsym "=") AssocRight $ opAST "="]
               ]
 
 term = choice [ list, vector, qmap, reader_macro, literal ]

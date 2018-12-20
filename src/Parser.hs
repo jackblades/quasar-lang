@@ -6,7 +6,7 @@ module Parser where
 --
 import Prelude
 import           AST
-import           Lexer hiding (symbol)
+import           Lexer hiding (symbol, identifier)
 import Text.Parsec hiding (choice)
 import           Text.Parsec.Expr (buildExpressionParser, Operator(..), Assoc(..))
 import qualified Data.Text as T
@@ -29,13 +29,15 @@ opAST op = \a b ->
 form :: ParsecT String u Identity (TextExpr a)
 form = buildExpressionParser optable terms1 where
     terms1  = src $ fmap QForm $ many1 term
-    optable = [[ binary (lexsym "$") AssocRight $ opAST "$" ]]
+    optable = [ [ binary (lexsym "$") AssocRight $ opAST "$" ]
+              , [ binary (lexsym "where") AssocRight $ opAST "where" ]
+              ]
 
-term    = choice [ list, vector, qmap, reader_macro, literal ]
+term = choice [ list, vector, qmap, reader_macro, literal ]
 
 forms = src $ fmap QForm $ many form
 cforms = sepEndBy forms comma
-field = (,) <$> form <*> (colon *> forms)
+field = (,) <$> term <*> (colon *> forms)
 cfields = sepEndBy field comma
 
 list = src $ fmap QList $ parens cforms
@@ -45,20 +47,20 @@ set = src $ fmap QSet
     $ between (lexsym "#{") (lexsym "}") cforms
 
 reader_macro = choice
-    [ lambda
-    , meta_data
+    [ meta_data
     , regex
+    , discard
     , var_quote
+    , dispatch
+    , lambda
     , host_expr
     , set
     , tag
-    , discard
-    , dispatch
     , deref
     , quote
     , backtick
-    , unquote
     , unquote_splicing
+    , unquote
     , gensym
     ]
     
@@ -81,17 +83,18 @@ deref
     = src $ fmap QDeref $ string "@" *> term
 
 gensym
-    = (src $ fmap (QLiteral . QSymbol) $ qsymbol) <* Lexer.char '#'
+    = (src $ fmap (QLiteral . QSymbol) $ qsymbol) <* lexsym "#"
 
 lambda
     -- : '#(' form* ')'
-    = string "#" *> (src $ QLambda <$> brackets cforms <*> term) -- TODO
+    = string "#" *> (src $ QLambda <$> args <*> term)
+    where args = try (brackets cforms) <|> pure []
 
 meta_data
     = string "#^" *> (src $ QMetadata <$> parseMaybe qmap <*> term)
 
 var_quote
-    = string "#\\" *> (src $ fmap QLiteral symbol)
+    = string "#\\" *> (src $ symbol >>= \(QSymbol s) -> return $ QVarQuote s)
 
 host_expr
     = string "#+" *> (src $ QHostExpr <$> term <*> form)
@@ -136,12 +139,12 @@ symbol = lexeme
     $ choice [ ns_symbol, simple_sym ]
 simple_sym = qsymbol
 ns_symbol = do 
-    ns <- identifier 
+    ns <- ident 
     Lexer.char '/' 
     sym <- qsymbol
     return $ mconcat [ns, T.pack "/", sym]
 
-qsymbol = choice [ fmap T.singleton (oneOf "./"), ident ] -- TODO identifier eats spaces
+qsymbol = choice [ fmap T.singleton (oneOf "./"), ident ] -- identifier eats spaces
 param_name = fmap QParam . fmap T.pack $ 
     Lexer.char '%' *> (try num <|> lexsym "&")
     where num = (:) <$> oneOf "123456789" <*> many (oneOf "0123456789")
@@ -174,5 +177,5 @@ parseMaybe p = try (fmap Just p) <|> return Nothing
 symbolToText (QSymbol s) = s
 parseFile p fname
     = do input <- readFile fname
-         let o = parse (whitespace *> p <* whitespace) fname input
+         let o = parse (whitespace *> p) fname input
          pPrint o

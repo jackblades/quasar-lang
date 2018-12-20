@@ -23,6 +23,7 @@ import Control.Monad (mzero)
 nums = "0123456789"
 langwords = "^`\'\"#~@:/%()[]{}$"  -- '\\'
 spcs = " \n\r\t,"
+opLetter = ":!#$%&*+./<=>?@\\^|-~"
 
 lexer = P.makeTokenParser style
 style :: P.LanguageDef st
@@ -31,12 +32,13 @@ style = emptyDef
     , P.commentEnd     = "|--"
     , P.commentLine    = "--"
     , P.nestedComments = True
-    , P.identStart     = Tpc.noneOf (nums ++ langwords ++ spcs)
-    , P.identLetter    = P.identStart style <|> Tpc.oneOf (nums ++ ".:")
-    , P.opStart        = mzero
-    , P.opLetter       = mzero
+    , P.identStart     = Tpc.letter <|> Tpc.oneOf "_:"
+    , P.identLetter    = Tpc.alphaNum 
+                     <|> Tp.try (Tpc.oneOf "_/:.-" <* Tp.notFollowedBy whitespace)
+    , P.opStart        = Tpc.oneOf opLetter
+    , P.opLetter       = Tpc.oneOf opLetter
     , P.reservedOpNames= []
-    , P.reservedNames  = []
+    , P.reservedNames  = ["where"]
     , P.caseSensitive  = True
     }
 
@@ -44,15 +46,16 @@ style = emptyDef
 singleton :: Functor f => f a -> f [a]
 singleton = fmap (:[])
 
-nonReserved f p = p >>= \name -> 
-    if T.unpack (f name) `elem` P.reservedNames style
+nonReserved p = do
+    name <- p
+    if name `elem` P.reservedNames style
         then Tp.unexpected ("reserved word " ++ show name)
-        else return name
+        else return (T.pack name)
 
-ident = do
+ident = nonReserved $ do
     c <- P.identStart style
     cs <- Tp.many (P.identLetter style)
-    return $ T.pack (c:cs)
+    return (c:cs)
 
 
 src p = Src <$> Tp.getPosition <*> p <*> Tp.getPosition
@@ -80,7 +83,7 @@ symbol = T.cons <$> char ':' <*> identifier
 rawOp = P.operator lexer
 binary p assoc f = Infix (p >> return f) assoc
 
--- TODO use 'sepEndBy'
+--
 comma = P.comma lexer *> return ()
 colon = P.colon lexer *> return ()
 commaSep = P.commaSep lexer
@@ -91,23 +94,6 @@ semiSep1 = P.semiSep1 lexer
 parens = P.parens lexer
 braces = P.braces lexer
 brackets = P.brackets lexer
-
-
--- parse primitive "" "true"
--- primitive
---   :: Tp.ParsecT String u Identity (TextExpr a)
--- primitive = QLiteral
---     <|> BOOL                    <$> Tp.try bool
---     <|> DOUBLE                  <$> Tp.try float
---     <|> INT                     <$> int
---     --
---     <|> CHAR                    <$> (P.charLiteral lexer)
---     <|> STRING                  <$> text
---     <|> RAWSTRING               <$> rawString  -- TODO competes with application
---     --
---     <|> SYMBOL                  <$> symbol
---     <|> VAR                     <$> qualifiedName  -- TODO maybe move to expr?
-
 
 -- qLiteral = src . fmap QLiteral
 -- qForm = src . fmap QForm

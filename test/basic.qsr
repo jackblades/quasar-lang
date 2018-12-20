@@ -1,0 +1,13 @@
+
+
+defn markov-data [text] $
+    let { sentences: clojure.string/split \text #"\\.'a'"
+        , maps      : mapcat make-markov-map sentences } $
+        apply merge-with concat maps
+          
+
+
+
+
+
+

@@ -27,7 +27,8 @@ cfields = sepEndBy field comma
 list = src $ fmap QList $ parens cforms
 vector = src $ fmap QVector $ brackets cforms
 qmap = src $ fmap QMap $ braces cfields
-set = src $ fmap QSet $ between (lexsym "#{") (lexsym "}") cforms
+set = src $ fmap QSet 
+    $ between (lexsym "#{") (lexsym "}") cforms
 
 reader_macro = choice
     [ lambda
@@ -107,7 +108,7 @@ literal
 qstring = fmap QString text
 qint = fmap (QInt . fromInteger) int
 qfloat = fmap QFloat float 
-qchar = fmap QChar charLiteral
+qchar = Lexer.char '\\' *> fmap QChar anyChar
 nil = lexsym "nil" *> return QNil
 qbool = fmap QBool bool
 
@@ -115,20 +116,21 @@ keyword = choice [ macro_keyword, simple_keyword ]
 simple_keyword = Lexer.char ':' *> symbol
 macro_keyword = string "::" *> symbol
 
-symbol = lexeme $ fmap QSymbol $ choice [ ns_symbol, simple_sym ]
+symbol = lexeme 
+    $ fmap QSymbol 
+    $ choice [ ns_symbol, simple_sym ]
 simple_sym = qsymbol
-ns_symbol = do ns <- identifier 
-               Lexer.char '/' 
-               sym <- qsymbol
-               return $ mconcat [ns, T.pack "/", sym]
+ns_symbol = do 
+    ns <- identifier 
+    Lexer.char '/' 
+    sym <- qsymbol
+    return $ mconcat [ns, T.pack "/", sym]
 
 qsymbol = choice [ fmap T.singleton (oneOf "./"), ident ] -- TODO identifier eats spaces
 param_name = fmap QParam . fmap T.pack $ 
     Lexer.char '%' *> (try num <|> lexsym "&")
     where num = (:) <$> oneOf "123456789" <*> many (oneOf "0123456789")
 
-
--- f #{1,2,3} isn't parsing
 
 -- primitives
 -- list, map, tuple, record, constructor

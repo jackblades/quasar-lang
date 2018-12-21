@@ -28,6 +28,7 @@ data Literal
 data TextAST a
     = QLiteral                  Literal
     | QForm                     [a]    
+    | QIdiom                    [a]    
     | QList                     [a]
     | QVector                   [a]
     | QMap                      [(a, a)]

@@ -20,37 +20,42 @@ import Control.Monad (mzero)
 import Text.Pretty.Simple (pPrint)
 import Text.Parsec.ByteString (parseFromFile)
 
+-- TODO type annotations
+-- TODO syntax macros
 
 noSrcOp = noSrc . QLiteral . QSymbol . T.pack
 opAST op = \a b -> 
     spanSrc a b $ QForm [noSrcOp op, a, b]
 
 --
-topLvl = opAST "=" <$> terms1 <*> (equalP *> whereExp)      -- f x y = whereExpr
+topLvl = opAST "=" <$> forms <*> (equalP *> whereExp)      -- f x y = whereExpr
 whereExp = do       -- expr where { a = fx, ... }
     lhs <- form
     try $ do lexsym "where"
-             let binding = (,) <$> terms1 <*> (equalP *> whereExp)
+             let binding = (,) <$> forms <*> (equalP *> whereExp)
              rhs <- src $ fmap QMap $ braces (sepEndBy binding comma)
              return $ opAST "where" lhs rhs
         <|> return lhs
 
 -- expr starts here
 form :: ParsecT String u Identity (TextExpr a)
-form = buildExpressionParser optable terms1 where       -- defines infix application
+form = buildExpressionParser optable forms where       -- defines infix application
     optable = [ [ binary (lexsym "$") AssocRight $ opAST "$" ]
             --   , [ binary (lexsym "where") AssocRight $ opAST "where" ]
             --   , [ binary (lexsym "=") AssocRight $ opAST "="]
               ]
 
-terms1  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
-term = choice [ list, vector, qmap, reader_macro, literal ]  -- defines the primitives
+forms  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
+-- terms1  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
+term = choice [ idiom, list, vector, qmap, reader_macro, literal ]  -- defines the primitives
 
-forms = src $ fmap QForm $ many form
+-- forms = src $ fmap QForm $ many form
 cforms = sepEndBy forms comma
 field = (,) <$> term <*> (colon *> forms)
 cfields = sepEndBy field comma
 
+idiom = src $ fmap QIdiom
+    $ between (lexsym "(|") (lexsym "|)") cforms
 list = src $ fmap QList $ parens cforms
 vector = src $ fmap QVector $ brackets cforms
 qmap = src $ fmap QMap $ braces cfields

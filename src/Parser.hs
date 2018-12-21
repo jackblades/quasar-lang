@@ -26,17 +26,25 @@ opAST op = \a b ->
     spanSrc a b $ QForm [noSrcOp op, a, b]
 
 --
-topLvl = (,) <$> forms <*> (equalP *> forms)
+topLvl = opAST "=" <$> terms1 <*> (equalP *> whereExp)      -- f x y = whereExpr
+whereExp = do       -- expr where { a = fx, ... }
+    lhs <- form
+    try $ do lexsym "where"
+             let binding = (,) <$> terms1 <*> (equalP *> whereExp)
+             rhs <- src $ fmap QMap $ braces (sepEndBy binding comma)
+             return $ opAST "where" lhs rhs
+        <|> return lhs
 
+-- expr starts here
 form :: ParsecT String u Identity (TextExpr a)
-form = buildExpressionParser optable terms1 where
-    terms1  = src $ fmap QForm $ many1 term
+form = buildExpressionParser optable terms1 where       -- defines infix application
     optable = [ [ binary (lexsym "$") AssocRight $ opAST "$" ]
-              , [ binary (lexsym "where") AssocRight $ opAST "where" ]
+            --   , [ binary (lexsym "where") AssocRight $ opAST "where" ]
             --   , [ binary (lexsym "=") AssocRight $ opAST "="]
               ]
 
-term = choice [ list, vector, qmap, reader_macro, literal ]
+terms1  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
+term = choice [ list, vector, qmap, reader_macro, literal ]  -- defines the primitives
 
 forms = src $ fmap QForm $ many form
 cforms = sepEndBy forms comma

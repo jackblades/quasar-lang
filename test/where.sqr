@@ -1,0 +1,14 @@
+
+-- we can write code that looks basically like haskell 
+
+markov-data text xml =
+    apply (merge-with f) concat $ maps #{ -2 } where
+       { sentences = ~@@~`clojure.string/split \text #"\\.'a'" "hello" -- xx
+        , maps     = mapcat make-markov-map sentences #[x y]filter }
+          
+
+
+
+
+
+

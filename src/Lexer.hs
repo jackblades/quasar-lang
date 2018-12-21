@@ -28,18 +28,19 @@ opLetter = ":!#$%&*+./<=>?@\\^|-~"
 lexer = P.makeTokenParser style
 style :: P.LanguageDef st
 style = emptyDef
-    { P.commentStart   = "--|"
-    , P.commentEnd     = "|--"
-    , P.commentLine    = "--"
-    , P.nestedComments = True
+    { P.commentLine    = "--"
     , P.identStart     = Tpc.letter <|> Tpc.oneOf "_:"
     , P.identLetter    = Tpc.alphaNum 
                      <|> Tp.try (Tpc.oneOf "_/:.-" <* Tp.notFollowedBy whitespace)
+    , P.caseSensitive  = True
     , P.opStart        = Tpc.oneOf opLetter
     , P.opLetter       = Tpc.oneOf opLetter
     , P.reservedOpNames= []
     , P.reservedNames  = ["where"]
-    , P.caseSensitive  = True
+    --
+    , P.commentStart   = ""
+    , P.commentEnd     = ""
+    , P.nestedComments = False
     }
 
 --
@@ -49,7 +50,7 @@ singleton = fmap (:[])
 nonReserved p = do
     name <- p
     if name `elem` P.reservedNames style
-        then Tp.unexpected ("reserved word " ++ show name)
+        then mzero -- Tp.unexpected ("reserved word " ++ show name)
         else return (T.pack name)
 
 ident = nonReserved $ do

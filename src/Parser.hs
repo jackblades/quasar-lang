@@ -40,7 +40,11 @@ whereExp = do       -- expr where { a = fx, ... }
 -- expr starts here
 form :: ParsecT String u Identity (TextExpr a)
 form = buildExpressionParser optable forms where       -- defines infix application
-    optable = [ [ binary (lexsym "$") AssocRight $ opAST "$" ]
+    optable = [ [ binary (lexsym "*") AssocRight $ opAST "*"
+                , binary (lexsym "/") AssocRight $ opAST "/" ]
+              , [ binary (lexsym "+") AssocRight $ opAST "+"
+                , binary (lexsym "-") AssocRight $ opAST "-" ]
+              , [ binary (lexsym "$") AssocRight $ opAST "$" ]
               , [ binary (lexsym "::") AssocRight $ opAST "::" ]  -- type annotation TODO
             --   , [ binary (lexsym "where") AssocRight $ opAST "where" ]
             --   , [ binary (lexsym "=") AssocRight $ opAST "="]

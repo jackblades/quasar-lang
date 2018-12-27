@@ -21,6 +21,7 @@ import Control.Monad (mzero)
 
 
 nums = "0123456789"
+dotnums = ".0123456789"
 langwords = "^`\'\"#~@:/%()[]{}$"  -- '\\'
 spcs = " \n\r\t,"
 opLetter = ":!#$%&*+./<=>?@\\^|-~"
@@ -71,8 +72,14 @@ bool = (lexsym "true" *> pure True)
 
 whitespace = P.whiteSpace lexer
 charLiteral = P.charLiteral lexer
-natural = P.natural lexer
-unsignedFloat = P.float lexer
+natural = fmap read (Tp.many1 Tp.digit) <* lexsym "i"
+unsignedFloat = do
+    hd <- Tp.many1 Tp.digit
+    tl <- Tp.try ((:) <$> char '.' <*> Tp.many1 Tp.digit) <|> return ""
+    lexsym "f"
+    return $ readf (hd ++ tl )
+    where readf = read :: [Char] -> Double
+
 int = natural <|> (char '-' *> fmap negate natural)
 float = unsignedFloat <|> (char '-' *> fmap negate unsignedFloat)
 char = Tpc.char

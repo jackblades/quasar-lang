@@ -51,8 +51,8 @@ forms  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b 
 term = choice1 [ idiom, list, vector, qmap, ffi, reader_macro, literal ]  -- defines the primitives
 
 -- forms = src $ fmap QForm $ many form
-cforms = sepEndBy forms comma
-field = (,) <$> term <*> (colon *> forms)
+cforms = sepEndBy form comma
+field = (,) <$> term <*> (colon *> form)
 cfields = sepEndBy field comma
 
 idiom = src $ fmap QIdiom
@@ -69,7 +69,7 @@ ffi = src $ fmap (QLiteral . QString . T.pack)
     escapedEndBrace = try (lexsym "\\}" *> pure '}')
     others = noneOf "}"
 
-reader_macro = choice
+reader_macro = choice1
     [ meta_data
     , regex
     , discard

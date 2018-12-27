@@ -44,6 +44,7 @@ form = buildExpressionParser optable forms where       -- defines infix applicat
                 , binary (lexsym "/") AssocRight $ opAST "/" ]
               , [ binary (lexsym "+") AssocRight $ opAST "+"
                 , binary (lexsym "-") AssocRight $ opAST "-" ]
+              -- general operators
               , [ binary (lexsym "$") AssocRight $ opAST "$" ]
               , [ binary (lexsym "::") AssocRight $ opAST "::" ]  -- type annotation TODO
             --   , [ binary (lexsym "where") AssocRight $ opAST "where" ]
@@ -63,7 +64,9 @@ idiom = src $ fmap QIdiom
     $ lexsym "(|" *> cforms <* lexsym "|)"
 list = src $ fmap QList $ parens cforms
 vector = src $ fmap QVector $ brackets cforms
-qmap = src $ fmap QMap $ braces cfields
+qmap = src $ fmap QMap $ braces (try cfields <|> fmap index cforms) where
+    index = zip (fmap indexConstructor [0 .. ])
+    indexConstructor = noSrc . QLiteral . QInt
 set = src $ fmap QSet 
     $ lexsym "#{" *> cforms <* lexsym "}"
 

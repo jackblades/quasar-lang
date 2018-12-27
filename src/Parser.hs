@@ -40,15 +40,16 @@ whereExp = do       -- expr where { a = fx, ... }
 -- expr starts here
 form :: ParsecT String u Identity (TextExpr a)
 form = buildExpressionParser optable forms where       -- defines infix application
-    optable = [ [ binary (lexsym "*") AssocRight $ opAST "*"
-                , binary (lexsym "/") AssocRight $ opAST "/" ]
-              , [ binary (lexsym "+") AssocRight $ opAST "+"
-                , binary (lexsym "-") AssocRight $ opAST "-" ]
+    optable = [ [ binary (lexsym "*") AssocLeft $ opAST "*"
+                , binary (lexsym "/") AssocLeft $ opAST "/" ]
+              , [ binary (lexsym "+") AssocLeft $ opAST "+"
+                , binary (lexsym "-") AssocLeft $ opAST "-" ]
               -- general operators
               , [ binary (lexsym "$") AssocRight $ opAST "$" ]
               , [ binary (lexsym "::") AssocRight $ opAST "::" ]  -- type annotation TODO
-            --   , [ binary (lexsym "where") AssocRight $ opAST "where" ]
-            --   , [ binary (lexsym "=") AssocRight $ opAST "="]
+              -- handled at a higher level
+              --   , [ binary (lexsym "where") AssocRight $ opAST "where" ]
+              --   , [ binary (lexsym "=") AssocRight $ opAST "="]
               ]
 
 forms  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
@@ -181,7 +182,7 @@ ns_symbol = do
     sym <- qsymbol
     return $ mconcat [ns, T.pack "/", sym]
 
-qsymbol = choice1 [ fmap T.singleton (oneOf "./"), ident ] -- identifier eats spaces
+qsymbol = choice1 [ fmap T.singleton (oneOf "."), ident ] -- identifier eats spaces
 param_name = fmap QParam . fmap T.pack $ 
     Lexer.char '%' *> (try num <|> lexsym "&")
     where num = (:) <$> oneOf "123456789" <*> many (oneOf "0123456789")

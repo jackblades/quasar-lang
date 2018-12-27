@@ -54,7 +54,7 @@ form = buildExpressionParser optable forms where       -- defines infix applicat
 
 forms  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
 -- terms1  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
-term = choice1 [ idiom, list, vector, qmap, ffi, reader_macro, literal ]  -- defines the primitives
+term = choice1 [ idiom, list, vector, doNotation, qmap, ffi, reader_macro, literal ]  -- defines the primitives
 
 -- forms = src $ fmap QForm $ many form
 cforms = sepEndBy form comma
@@ -71,8 +71,13 @@ qmap = src $ fmap QMap $ braces (try cfields <|> fmap index cforms) where
 set = src $ fmap QSet 
     $ lexsym "#{" *> cforms <* lexsym "}"
 
--- TODO generalized ffi not just java
-ffi = src $ fmap (QLiteral . QString . T.pack)
+--
+doNotation = src $ fmap QDo
+    $ lexsym "{|" *> semiSep (choice1 [assign, bind, form])  <* lexsym "|}" where
+        assign = opAST "=" <$> forms <*> (equalP *> whereExp)
+        bind   = opAST "<-" <$> forms <*> (lexsym "<-" *> whereExp)
+
+ffi = src $ fmap (QRaw . T.pack)
     $ lexsym ":{" *> many1 (escapedEndBrace <|> others) <* lexsym "}" where
     escapedEndBrace = try (lexsym "\\}" *> pure '}')
     others = noneOf "}"

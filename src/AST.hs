@@ -28,7 +28,6 @@ data Literal
 data TextAST a
     = QLiteral                  Literal
     | QForm                     [a]    
-    | QIdiom                    [a]    
     | QList                     [a]
     | QVector                   [a]
     | QMap                      [(a, a)]
@@ -47,6 +46,10 @@ data TextAST a
     | QUnquote                  a
     | QUnquoteSplicing          a
     | QGenSym                   Text
+    --
+    | QIdiom                    [a]    
+    | QDo                       [a]    
+    | QRaw                      Text
     deriving (Show, Functor)
 
 data Src f a

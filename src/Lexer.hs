@@ -92,8 +92,8 @@ rawOp = P.operator lexer
 binary p assoc f = Infix (p >> return f) assoc
 
 --
-comma = P.comma lexer *> return ()
-colon = P.colon lexer *> return ()
+comma = P.comma lexer
+colon = P.colon lexer
 equalP = lexsym "="
 commaSep = P.commaSep lexer
 commaSep1 = P.commaSep1 lexer

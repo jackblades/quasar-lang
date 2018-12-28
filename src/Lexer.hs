@@ -72,7 +72,8 @@ bool = (lexsym "true" *> pure True)
 
 whitespace = P.whiteSpace lexer
 charLiteral = P.charLiteral lexer
-natural = fmap read (Tp.many1 Tp.digit) <* lexsym "i"
+-- natural = fmap read (Tp.many1 Tp.digit) <* lexsym "i"
+natural = P.natural lexer
 unsignedFloat = do
     hd <- Tp.many1 Tp.digit
     tl <- Tp.try ((:) <$> char '.' <*> Tp.many1 Tp.digit) <|> return ""

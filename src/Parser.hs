@@ -1,8 +1,6 @@
 
 module Parser where
 
--- TODO pPrint $ parse form "" "#\"ajitsingh\\c\""
-
 --
 import           Prelude
 import           AST
@@ -26,6 +24,9 @@ import           Text.Parsec.ByteString (parseFromFile)
 noSrcOp = noSrc . QLiteral . QSymbol . T.pack
 opAST op = \a b -> 
     spanSrc a b $ QForm [noSrcOp op, a, b]
+opASTUnary op = \a -> 
+    spanSrc a a $ QForm [noSrcOp op, a]
+    
 
 --
 topLvl = opAST "=" <$> forms <*> (equalP *> whereExp)      -- f x y = whereExpr
@@ -40,13 +41,46 @@ whereExp = do       -- expr where { a = fx, ... }
 -- expr starts here
 form :: ParsecT String u Identity (TextExpr a)
 form = buildExpressionParser optable forms where       -- defines infix application
-    optable = [ [ binary (lexsym "*") AssocLeft $ opAST "*"
-                , binary (lexsym "/") AssocLeft $ opAST "/" ]
+    optable = [ [ prefix (lexsym "!") $ opASTUnary "!"
+                , prefix (lexsym "~") $ opASTUnary "~" ]
+              -- (8)
+              , [ binary (lexsym "*") AssocLeft $ opAST "*"
+                , binary (lexsym "/") AssocLeft $ opAST "/"
+                , binary (lexsym "%") AssocLeft $ opAST "%" ]  -- TODO conflicts with param_name
+              -- (6)
               , [ binary (lexsym "+") AssocLeft $ opAST "+"
                 , binary (lexsym "-") AssocLeft $ opAST "-" ]
+              -- (6)
+              , [ binary (lexsym ">>") AssocLeft $ opAST ">>"
+                , binary (lexsym "<<") AssocLeft $ opAST "<<" ]
+              -- logical operators (4)  
+              , [ binary (lexsym ">") AssocNone $ opAST ">"
+                , binary (lexsym "<") AssocNone $ opAST "<"
+                , binary (lexsym ">=") AssocNone $ opAST ">="
+                , binary (lexsym "<=") AssocNone $ opAST "<=" ]
+              --
+              , [ binary (lexsym "==") AssocNone $ opAST "=="
+                , binary (lexsym "!=") AssocNone $ opAST "!=" ]
+              -- logical operators (3)
+              , [ binary (lexsym "&") AssocLeft $ opAST "&" ]
+              , [ binary (lexsym "^") AssocLeft $ opAST "^" ]
+              , [ binary (lexsym "|") AssocLeft $ opAST "|" ]
+              , [ binary (lexsym "&&") AssocLeft $ opAST "&&" ]
+              , [ binary (lexsym "||") AssocLeft $ opAST "||" ]
+              --
+              , [ binary (lexsym "+=") AssocRight $ opAST "+="
+                , binary (lexsym "-=") AssocRight $ opAST "-="
+                , binary (lexsym "*=") AssocRight $ opAST "*="
+                , binary (lexsym "/=") AssocRight $ opAST "/="
+                , binary (lexsym "%=") AssocRight $ opAST "%="
+                , binary (lexsym "<<=") AssocRight $ opAST "<<="
+                , binary (lexsym ">>=") AssocRight $ opAST ">>="
+                , binary (lexsym "&=") AssocRight $ opAST "&="
+                , binary (lexsym "|=") AssocRight $ opAST "|="
+                , binary (lexsym "^=") AssocRight $ opAST "^=" ]
               -- general operators
               , [ binary (lexsym "$") AssocRight $ opAST "$" ]
-              , [ binary (lexsym "::") AssocRight $ opAST "::" ]  -- type annotation TODO
+              , [ binary (lexsym "::") AssocRight $ opAST "::" ]
               -- handled at a higher level
               --   , [ binary (lexsym "where") AssocRight $ opAST "where" ]
               --   , [ binary (lexsym "=") AssocRight $ opAST "="]
@@ -65,13 +99,22 @@ idiom = src $ fmap QIdiom
     $ lexsym "(|" *> cforms <* lexsym "|)"
 list = src $ fmap QList $ parens cforms
 vector = src $ fmap QVector $ brackets cforms
-qmap = src $ fmap QMap $ braces (try cfields <|> fmap index cforms) where
+qmap = src $ fmap QMap $ braces (try cfields <|> withIndex cforms) where
+    withIndex = fmap index
     index = zip (fmap indexConstructor [0 .. ])
     indexConstructor = noSrc . QLiteral . QInt
 set = src $ fmap QSet 
     $ lexsym "#{" *> cforms <* lexsym "}"
 
 --
+ternary = do  -- TODO
+    e <- forms
+    lexsym "?"
+    t <- form
+    lexsym ":"
+    f <- form
+    return $ spanSrc e f $ QForm [noSrcOp "?:", e, t, f]
+
 doNotation = src $ fmap QDo
     $ lexsym "{|" *> semiSep (choice1 [assign, bind, form])  <* lexsym "|}" where
         assign = opAST "=" <$> forms <*> (equalP *> whereExp)

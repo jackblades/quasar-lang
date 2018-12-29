@@ -15,6 +15,8 @@ import           Text.Parsec     as Tp
 
 data Literal
     = QString                   Text
+    | QRegex                    Text
+    | QRaw                      Text
     | QInt                      Int
     | QFloat                    Double
     | QChar                     Char
@@ -23,6 +25,7 @@ data Literal
     | QKeyword                  Text
     | QSymbol                   Text
     | QParam                    Text
+    | QGensym                   Text
     deriving (Show)
 
 data TextAST a
@@ -33,23 +36,14 @@ data TextAST a
     | QMap                      [(a, a)]
     | QSet                      [a]
     | QLambda                   [a] a
-    | QMetadata                 (Maybe a) a
-    | QRegex                    Text
-    | QVarQuote                 Text
-    | QHostExpr                 a a
-    | QTag                      a a
-    | QDiscard                  a
-    | QDispatch                 Text a
     | QDeref                    a
     | QQuote                    a
     | QBacktick                 a
     | QUnquote                  a
     | QUnquoteSplicing          a
-    | QGenSym                   Text
     --
     | QIdiom                    [a]    
     | QDo                       [a]    
-    | QRaw                      Text
     deriving (Show, Functor)
 
 data Src f a

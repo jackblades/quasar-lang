@@ -90,8 +90,9 @@ rawString = char 'r' *> text
 symbol = T.cons <$> char ':' <*> identifier
 
 rawOp = P.operator lexer
-binary p assoc f = Infix (p >> return f) assoc
-prefix p       f = Prefix (p >> return f)
+binary  p assoc f = Infix (p >> return f) assoc
+prefix  p       f = Prefix (p >> return f)
+postfix p       f = Postfix (p >> return f)
 
 --
 comma = P.comma lexer

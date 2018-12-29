@@ -95,8 +95,6 @@ cforms = sepEndBy form comma
 field = (,) <$> term <*> (colon *> form)
 cfields = sepEndBy field comma
 
-idiom = src $ fmap QIdiom
-    $ lexsym "(|" *> cforms <* lexsym "|)"
 list = src $ fmap QList $ parens cforms
 vector = src $ fmap QVector $ brackets cforms
 qmap = src $ fmap QMap $ braces (try cfields <|> withIndex cforms) where
@@ -115,26 +113,24 @@ ternary = do  -- TODO
     f <- form
     return $ spanSrc e f $ QForm [noSrcOp "?:", e, t, f]
 
+idiom = src $ fmap QIdiom
+    $ lexsym "(|" *> cforms <* lexsym "|)"
+
 doNotation = src $ fmap QDo
     $ lexsym "{|" *> semiSep (choice1 [assign, bind, form])  <* lexsym "|}" where
         assign = opAST "=" <$> forms <*> (equalP *> whereExp)
         bind   = opAST "<-" <$> forms <*> (lexsym "<-" *> whereExp)
 
-ffi = src $ fmap (QRaw . T.pack)
+ffi = src $ fmap (QLiteral . QRaw . T.pack)
     $ lexsym ":{" *> many1 (escapedEndBrace <|> others) <* lexsym "}" where
     escapedEndBrace = try (lexsym "\\}" *> pure '}')
     others = noneOf "}"
 
+--
 reader_macro = choice1
-    [ meta_data
-    , regex
-    , discard
-    , var_quote
-    , dispatch
+    [ regex
     , lambda
-    , host_expr
     , set
-    , tag
     , deref
     , quote
     , backtick
@@ -155,37 +151,19 @@ unquote
 unquote_splicing
     = src $ fmap QUnquoteSplicing $ string "~@" *> term
 
-tag
-    = string "^" *> (src $ QTag <$> term <*> form)
-
 deref
     = src $ fmap QDeref $ string "@" *> term
 
 gensym
-    = (src $ fmap (QLiteral . QSymbol) $ qsymbol) <* lexsym "#"
+    = (src $ fmap (QLiteral . QGensym) $ qsymbol) <* lexsym "#"
 
 lambda
     -- : '#(' form* ')'
     = string "#" *> src (QLambda <$> args <*> term)
     where args = try (brackets cforms) <|> pure []
 
-meta_data
-    = string "#^" *> src (QMetadata <$> parseMaybe qmap <*> term)
-
-var_quote
-    = string "#\\" *> src (symbol >>= \(QSymbol s) -> return $ QVarQuote s)
-
-host_expr
-    = string "#+" *> src (QHostExpr <$> term <*> form)
-
-discard
-    = string "#_" *> src (fmap QDiscard term)
-
-dispatch
-    = string "#" *> src (QDispatch <$> fmap symbolToText symbol <*> form)
-
 regex
-    = string "#" *> src (fmap QLiteral qstring)
+    = string "#" *> src (fmap (QLiteral . QRegex) text)
 --    string "#"; src (| :pure QLiteral qstring |)
 
 literal :: ParsecT String u Identity (TextExpr a)

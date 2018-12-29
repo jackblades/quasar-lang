@@ -45,13 +45,13 @@ whereExp = do       -- expr where { a = fx, ... }
 form :: ParsecT String u Identity (TextExpr a)
 form = buildInfixParser optable forms       -- defines infix application
 
-optable = ops where
+optable = M.fromList $ descendingPrec ops where
     binaryOp = (,)
     descendingPrec ioptable = do
         (prec, ops) <- zip [100,99..0] ioptable
         (op, assoc) <- ops
         return (op, (assoc, prec)) 
-    ops = M.fromList $ descendingPrec [ -- (8)
+    ops = [ -- (8)
         [ binaryOp "*" AssocLeft
         , binaryOp "/" AssocLeft
         , binaryOp "%" AssocLeft   -- TODO conflicts with param_name
@@ -69,7 +69,7 @@ optable = ops where
         , binaryOp "<=" AssocNone ]
         --
         , [ binaryOp "==" AssocNone
-        , binaryOp "!=" AssocNone ]
+        , binaryOp "!=" AssocNone ]  -- TODO can't get past prefix '!'
         -- logical operators (3)
         , [ binaryOp "&" AssocLeft ]
         , [ binaryOp "^" AssocLeft ]
@@ -96,26 +96,26 @@ optable = ops where
       ]
 
 forms  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
-term = buildExpressionParser optable term2 where
-    prefixOp op = prefix (try $ string op) $ opASTUnary op
+term = do
+    parseMaybe (choice optable) >>= \case
+        Nothing -> term2
+        Just op -> term2 >>= return . opASTUnary op 
+  where
     optable = 
-        [ [ prefixOp "~@"  -- TODO conflict betweem '~' and '~@'
-          , prefixOp "~"
-          , prefixOp "!"
-          , prefixOp "\\"
-          , prefixOp "`"
-          , prefixOp "@"
-          , prefixOp "#" ]
+        [ string "~@"
+        , string "~"
+        , string "!"
+        , string "\\"
+        , string "`"
+        , string "@"
+        , string "#" 
         ]
-
--- ("(", ")", [(",", QList)], f)
-
 
 term2 = choice1 $ productDef <> prim where    -- defines the primitives
     prim = [ reader_macro, literal ]
     productDef =
         [ qprod "(|" cforms "|)" QIdiom
-        , qprod "(" cforms "|)" QList
+        , qprod "(" cforms ")" QList
         , qprod "[" cforms "]" QVector
         , qprod "{|" qdo "|}" QDo
         , qprod "{" qmap "}" QMap
@@ -138,7 +138,6 @@ term2 = choice1 $ productDef <> prim where    -- defines the primitives
 
     qprod beg p end f = lexsym beg *> src (fmap f p) <* lexsym end
 
--- forms = src $ fmap QForm $ many form
 cforms = sepEndBy form comma
 field = (,) <$> term <*> (colon *> form)
 cfields = sepEndBy field comma
@@ -269,10 +268,10 @@ instance Show Assoc where
 buildInfixParser optable term =  fmap listToTree parseList where
     itTerm = fmap TERM term
     itOperator = fmap OPERATOR operator
-    operator = choice1 $ fmap (try . lexsym) $ reverse $ M.keys optable
+    operator = choice1 $ fmap lexsym $ reverse $ M.keys optable
 
     -- parses 'x (op y)*' into [x, op, y, op, y, ...]
-    parseList = (:) <$> itTerm <*> go where
+    parseList = (:) <$> itTerm <*> (try go <|> return []) where
         go = do
             op <- itOperator
             y <- itTerm
@@ -287,7 +286,7 @@ buildInfixParser optable term =  fmap listToTree parseList where
         f (terms,operators)  (TERM a)     = (a : terms, operators)
         f (terms,[])         (OPERATOR a) = (terms    , [a])
         f (x:y:terms, o:operators) (OPERATOR a) = 
-            if | prec_A < prec_O  -> f reduceTermOnly (OPERATOR a)  -- TODO modify reduce?
+            if | prec_A < prec_O  -> f reduceTermOnly (OPERATOR a)
                | prec_A > prec_O  -> shift
                | prec_A == prec_O -> case (assoc_O, assoc_A) of
                     (AssocLeft, _)         -> reduce

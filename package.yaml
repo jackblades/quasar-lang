@@ -20,7 +20,43 @@ extra-source-files:
 description:         Please see the README on Github at <https://github.com/githubuser/quasar#readme>
 
 default-extensions:
+- StrictData
+- NoImplicitPrelude
+- ApplicativeDo
+- BangPatterns
+- ConstraintKinds
+- DataKinds
+- DefaultSignatures
+- DeriveFoldable
+- DeriveFunctor
+- DeriveGeneric
+- DeriveLift
+- DeriveTraversable
+- DerivingStrategies
+- EmptyCase
+- ExistentialQuantification
+- FlexibleContexts
+- FlexibleInstances
+- FunctionalDependencies
+- GeneralizedNewtypeDeriving
+- InstanceSigs
+- KindSignatures
 - LambdaCase
+- MultiParamTypeClasses
+- MultiWayIf
+- NamedFieldPuns
+- OverloadedStrings
+- PatternSynonyms
+- RankNTypes
+- ScopedTypeVariables
+- StandaloneDeriving
+- TupleSections
+- TypeApplications
+- TypeOperators
+# -------
+# - GADTs
+# - TypeFamilies
+# - TypeFamilyDependencies
 
 dependencies:
 - base >= 4.7 && < 5
@@ -35,9 +71,9 @@ dependencies:
 - bound
 - unification-fd
 # - epic  # compile to C
-- dhall
+# - dhall
 - staticanalysis
-- hoopl         # dataflow optimization
+# - hoopl         # dataflow optimization
 # - maxsharing
 
 library:

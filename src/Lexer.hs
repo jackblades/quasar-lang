@@ -31,7 +31,7 @@ style :: P.LanguageDef st
 style = emptyDef
     { P.commentLine    = "--"
     , P.identStart     = Tpc.letter <|> Tpc.oneOf "_:"
-    , P.identLetter    = Tpc.alphaNum 
+    , P.identLetter    = Tpc.alphaNum
                      <|> Tp.try (Tpc.oneOf "_/:.-" <* Tp.notFollowedBy whitespace)
     , P.caseSensitive  = True
     , P.opStart        = Tpc.oneOf opLetter

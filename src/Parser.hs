@@ -43,9 +43,9 @@ whereExp = do       -- expr where { a = fx, ... }
 
 -- expr starts here
 form :: ParsecT String u Identity (TextExpr a)
-form = buildInfixParser optable forms       -- defines infix application
+form = buildInfixParser bin_optable forms       -- defines infix application
 
-optable = M.fromList $ descendingPrec ops where
+bin_optable = M.fromList $ descendingPrec ops where
     binaryOp = (,)
     descendingPrec ioptable = do
         (prec, ops) <- zip [100,99..0] ioptable
@@ -58,18 +58,18 @@ optable = M.fromList $ descendingPrec ops where
         , binaryOp "." AssocLeft]  -- TODO parsed as QSymbol
         -- (6)
         , [ binaryOp "+" AssocLeft
-        , binaryOp "-" AssocLeft ]
+          , binaryOp "-" AssocLeft ]
         -- (6)
         , [ binaryOp ">>" AssocLeft
-        , binaryOp "<<" AssocLeft ]
+          , binaryOp "<<" AssocLeft ]
         -- logical operators (4)  
         , [ binaryOp ">" AssocNone
-        , binaryOp "<" AssocNone
-        , binaryOp ">=" AssocNone
-        , binaryOp "<=" AssocNone ]
+          , binaryOp "<" AssocNone
+          , binaryOp ">=" AssocNone
+          , binaryOp "<=" AssocNone ]
         --
         , [ binaryOp "==" AssocNone
-        , binaryOp "!=" AssocNone ]  -- TODO can't get past prefix '!'
+          , binaryOp "!=" AssocNone ] 
         -- logical operators (3)
         , [ binaryOp "&" AssocLeft ]
         , [ binaryOp "^" AssocLeft ]
@@ -78,15 +78,15 @@ optable = M.fromList $ descendingPrec ops where
         , [ binaryOp "||" AssocLeft ]
         --
         , [ binaryOp "+=" AssocRight
-        , binaryOp "-=" AssocRight
-        , binaryOp "*=" AssocRight
-        , binaryOp "/=" AssocRight
-        , binaryOp "%=" AssocRight
-        , binaryOp "<<=" AssocRight
-        , binaryOp ">>=" AssocRight
-        , binaryOp "&=" AssocRight
-        , binaryOp "|=" AssocRight
-        , binaryOp "^=" AssocRight ]
+          , binaryOp "-=" AssocRight
+          , binaryOp "*=" AssocRight
+          , binaryOp "/=" AssocRight
+          , binaryOp "%=" AssocRight
+          , binaryOp "<<=" AssocRight
+          , binaryOp ">>=" AssocRight
+          , binaryOp "&=" AssocRight
+          , binaryOp "|=" AssocRight
+          , binaryOp "^=" AssocRight ]
         -- general operators
         , [ binaryOp "$" AssocRight ]
         , [ binaryOp "::" AssocRight ]
@@ -96,12 +96,14 @@ optable = M.fromList $ descendingPrec ops where
       ]
 
 forms  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
-term = do
-    parseMaybe (choice optable) >>= \case
-        Nothing -> term2
-        Just op -> term2 >>= return . opASTUnary op 
+term =
+    choice (fmap parsePrefixOpTerm pre_optable) <|> term2
   where
-    optable = 
+    parsePrefixOpTerm prefixOpParser = do
+        op <- prefixOpParser
+        trm <- term2
+        return $ opASTUnary op trm
+    pre_optable = 
         [ string "~@"
         , string "~"
         , string "!"

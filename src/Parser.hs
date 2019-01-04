@@ -14,6 +14,7 @@ import qualified Data.Text as T
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
 
+import           Data.List (sort)
 import           Control.Applicative (liftA2)
 import           Data.Monoid ((<>))
 import           Debug.Trace (trace, traceShow)
@@ -96,23 +97,23 @@ term =
     choice (fmap parsePrefix pre_optable) <|> term2
   where
     parsePrefix op =
-        opASTUnary <$> op <*> term2
-    pre_optable = 
-        [ string "~@"
-        , string "~"
-        , string "!"
-        -- , string "\\"  -- conflicts with lambda
-        , string "`"
-        , string "@"
-        , string "#" 
-        -- , string "%" 
-        ]
+        opASTUnary <$> string op <*> term2
+pre_optable = reverse . sort $
+    [ "~@"
+    , "~"
+    , "!"
+    -- , "\\"  -- conflicts with lambda
+    , "`"
+    , "@"
+    , "#" 
+    -- , "%" 
+    ]
 
 term2 = choice1 $ productDef <> prim where    -- defines the primitives
     prim = [ lambda, gensym, literal ]
     productDef =
         [ qprod "(|" cforms "|)" QIdiom
-        , qprod "(" cforms ")" QList
+        , qprod "(" cforms ")" (\x -> if length x == 1 then _expr (head x) else QList x)
         , qprod "[" cforms "]" QVector
         , qprod "{|" qdo "|}" QDo
         , qprod "{" qmap "}" QMap

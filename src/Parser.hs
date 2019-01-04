@@ -6,14 +6,15 @@ module Parser where
 --
 import           Prelude
 import           AST
-import           Lexer hiding (symbol, identifier)
-import           Text.Parsec hiding (choice)
+import           Lexer hiding (symbol)
+import           Text.Parsec hiding (choice, char)
 import           Text.Parsec.Expr (buildExpressionParser, Operator(..), Assoc(..))
 import qualified Data.Text as T
 
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
 
+import           Control.Applicative (liftA2)
 import           Data.Monoid ((<>))
 import           Debug.Trace (trace, traceShow)
 import           Data.Functor.Identity (Identity)
@@ -21,11 +22,8 @@ import           Control.Monad (mzero)
 import           Text.Pretty.Simple (pPrint)
 import           Text.Parsec.ByteString (parseFromFile)
 
--- TODO type annotations
--- TODO syntax macros
-
 noSrcOp = noSrc . QLiteral . QSymbol . T.pack
-opAST op = \a b -> 
+opAST op = \b a -> 
     spanSrc a b $ QForm [noSrcOp op, a, b]
 opASTUnary op = \a -> 
     spanSrc a a $ QForm [noSrcOp op, a]
@@ -52,10 +50,10 @@ bin_optable = M.fromList $ descendingPrec ops where
         (op, assoc) <- ops
         return (op, (assoc, prec)) 
     ops = [ -- (8)
-        [ binaryOp "*" AssocLeft
-        , binaryOp "/" AssocLeft
-        , binaryOp "%" AssocLeft   -- TODO conflicts with param_name
-        , binaryOp "." AssocLeft]  -- TODO parsed as QSymbol
+          [ binaryOp "*" AssocLeft
+          , binaryOp "/" AssocLeft
+          , binaryOp "%" AssocLeft
+          , binaryOp "." AssocLeft ]
         -- (6)
         , [ binaryOp "+" AssocLeft
           , binaryOp "-" AssocLeft ]
@@ -97,24 +95,23 @@ bin_optable = M.fromList $ descendingPrec ops where
 
 forms  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
 term =
-    choice (fmap parsePrefixOpTerm pre_optable) <|> term2
+    choice (fmap parsePrefix pre_optable) <|> term2
   where
-    parsePrefixOpTerm prefixOpParser = do
-        op <- prefixOpParser
-        trm <- term2
-        return $ opASTUnary op trm
+    parsePrefix op =
+        opASTUnary <$> op <*> term2
     pre_optable = 
         [ string "~@"
         , string "~"
         , string "!"
-        , string "\\"
+        -- , string "\\"  -- conflicts with lambda
         , string "`"
         , string "@"
         , string "#" 
+        -- , string "%" 
         ]
 
 term2 = choice1 $ productDef <> prim where    -- defines the primitives
-    prim = [ reader_macro, literal ]
+    prim = [ lambda, gensym, literal ]
     productDef =
         [ qprod "(|" cforms "|)" QIdiom
         , qprod "(" cforms ")" QList
@@ -124,7 +121,7 @@ term2 = choice1 $ productDef <> prim where    -- defines the primitives
         , qprod "#{" cforms "}" QSet
         , qprod ":{" qraw "}" (QLiteral . QRaw . T.pack)
         ]
-
+    --
     qdo = semiSep $ choice1 [assign, bind, form] where
         assign = opAST "=" <$> forms <*> (equalP *> whereExp)
         bind   = opAST "<-" <$> forms <*> (lexsym "<-" *> whereExp)
@@ -139,34 +136,18 @@ term2 = choice1 $ productDef <> prim where    -- defines the primitives
         others = noneOf "}"
 
     qprod beg p end f = lexsym beg *> src (fmap f p) <* lexsym end
-
-cforms = sepEndBy form comma
-field = (,) <$> term <*> (colon *> form)
-cfields = sepEndBy field comma
-
---
-ternary = do  -- TODO
-    e <- forms
-    lexsym "?"
-    t <- form
-    lexsym ":"
-    f <- form
-    return $ spanSrc e f $ QForm [noSrcOp "?:", e, t, f]
+    -- 
+    cforms = sepEndBy form comma
+    field = (,) <$> term <*> (colon *> form)
+    cfields = sepEndBy field comma
 
 --
-reader_macro = choice1
-    [ regex
-    , lambda
-    , gensym
-    ]
-
-lambda
-    -- : '#(' form* ')'
-    = string "#" *> src (QLambda <$> args <*> term)
-    where args = try (brackets cforms) <|> pure []
-
-regex
-    = string "#" *> src (fmap (QLiteral . QRegex) text)
+lambda = src $ do
+    lexsym "\\"
+    args <- many1 identifier
+    lexsym "->"
+    body <- whereExp
+    return $ QLambda args body
 
 gensym
     = (src $ fmap (QLiteral . QGensym) $ qsymbol) <* lexsym "#"
@@ -184,7 +165,6 @@ literal
         , qbool
         , keyword
         , symbol
-        , param_name
         ]
 
 qstring = fmap QString text
@@ -213,10 +193,7 @@ ns_symbol = do
     sym <- qsymbol
     return $ mconcat [ns, T.pack "/", sym]
 
-qsymbol = choice1 [ fmap T.singleton (oneOf "."), ident ] -- identifier eats spaces
-param_name = fmap QParam . fmap T.pack $ 
-    Lexer.char '%' *> (try num <|> lexsym "&")  -- TODO (LAST PART IS OPTIONAL)
-    where num = (:) <$> oneOf "123456789" <*> many (oneOf "0123456789")
+qsymbol = ident -- identifier eats spaces
 
 
 -- primitives
@@ -267,21 +244,22 @@ instance Show Assoc where
     show AssocRight = "AssocRight"
 
 -- buildInfixParser :: b -> TextExpr a -> ParsecT String u Identity (TextExpr a)
-buildInfixParser optable term =  fmap listToTree parseList where
+buildInfixParser optable term =  fmap shuntingYard parseInfixTermsList where
     itTerm = fmap TERM term
     itOperator = fmap OPERATOR operator
     operator = choice1 $ fmap lexsym $ reverse $ M.keys optable
 
     -- parses 'x (op y)*' into [x, op, y, op, y, ...]
-    parseList = (:) <$> itTerm <*> (try go <|> return []) where
-        go = do
+    parseInfixTermsList = (:) <$> itTerm <*> parseOptionalTerms where
+        parseOptionalTerms = try manyOpTerm <|> return []
+        manyOpTerm = do
             op <- itOperator
-            y <- itTerm
-            t' <- try go <|> return []
+            y  <- itTerm
+            t' <- parseOptionalTerms
             return (op : y : t') 
 
     -- runs the shunting yard algorithm to parse the list into a tree
-    listToTree xs = head . foldRemaining . foldList $ xs where
+    shuntingYard xs = head . foldRemaining . foldList $ xs where
         foldList = foldl f ([], [])
 
         -- f (ts, os) b | traceShow (length ts, os, b) False = undefined  -- DEBUG
@@ -295,13 +273,30 @@ buildInfixParser optable term =  fmap listToTree parseList where
                     (AssocNone, AssocLeft) -> reduce
                     otherwise              -> shift
           where
-            Just (assoc_A, prec_A) = M.lookup a optable  -- TODO handle failure
-            Just (assoc_O, prec_O) = M.lookup o optable  -- TODO handle failure
+            -- 'Nothing' case can't happen because it won't parse
+            Just (assoc_A, prec_A) = M.lookup a optable  
+            Just (assoc_O, prec_O) = M.lookup o optable
             shift = (x:y:terms, a:o:operators)
             reduce = (opAST o x y : terms, a:operators)
             reduceTermOnly = (opAST o x y : terms, operators)
         
+        foldRemaining (terms, operators) = foldl reduce1 terms operators where
+            reduce1 (x:y:terms) o = opAST o x y : terms
 
-    foldRemaining (terms, operators) = foldl reduce1 terms operators where
-        reduce1 (x:y:terms) o = opAST o x y : terms
+-- EXPERIMENTAL
+-- requires adding any reserved names to 'reservedNames' in the Lexer
+buildMixfixParser optable term = 
+    choice1 $ fmap parseMixfix optable where
+        parseMixfix [] = error "mixfix optable contains an empty operator\n - maybe we can just ignore empty"
+        parseMixfix xs = fmap (noSrc . QForm) 
+                       -- $ sequence $ fmap (\x -> opASTUnary <$> x <*> term) xs
+                       $ sequence [ opASTUnary <$> (lexsym "if")   <*> term
+                                  , opASTUnary <$> (lexsym "then") <*> term
+                                  , opASTUnary <$> (lexsym "else") <*> term ]
+
+mixfix_optable =
+    [ [lexsym "if", lexsym "then", lexsym "else"]
+    ]
+
+
 

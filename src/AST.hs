@@ -35,7 +35,7 @@ data TextAST a
     | QVector                   [a]
     | QMap                      [(a, a)]
     | QSet                      [a]
-    | QLambda                   [a] a
+    | QLambda                   [Text] a
     | QDeref                    a
     | QQuote                    a
     | QBacktick                 a

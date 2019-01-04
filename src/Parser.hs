@@ -23,7 +23,7 @@ import           Text.Pretty.Simple (pPrint)
 import           Text.Parsec.ByteString (parseFromFile)
 
 noSrcOp = noSrc . QLiteral . QSymbol . T.pack
-opAST op = \b a -> 
+opAST op = \a b -> 
     spanSrc a b $ QForm [noSrcOp op, a, b]
 opASTUnary op = \a -> 
     spanSrc a a $ QForm [noSrcOp op, a]
@@ -33,11 +33,12 @@ opASTUnary op = \a ->
 topLvl = opAST "=" <$> forms <*> (equalP *> whereExp)      -- f x y = whereExpr
 whereExp = do       -- expr where { a = fx, ... }
     lhs <- form
-    try $ do lexsym "where"
+    parseMaybe (lexsym "where") >>= \case
+        Nothing -> return lhs
+        Just _  -> do
              let binding = (,) <$> forms <*> (equalP *> whereExp)
              rhs <- src $ fmap QMap $ braces (sepEndBy binding comma)
              return $ opAST "where" lhs rhs
-        <|> return lhs
 
 -- expr starts here
 form :: ParsecT String u Identity (TextExpr a)
@@ -88,9 +89,6 @@ bin_optable = M.fromList $ descendingPrec ops where
         -- general operators
         , [ binaryOp "$" AssocRight ]
         , [ binaryOp "::" AssocRight ]
-        -- handled at a higher level
-        --   , [ binary (lexsym "where") AssocRight $ opAST "where" ]
-        --   , [ binary (lexsym "=") AssocRight $ opAST "="]
       ]
 
 forms  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
@@ -218,11 +216,12 @@ qsymbol = ident -- identifier eats spaces
 
 
 --
+choice1 = choice
 choice ps = foldr (<|>) mzero $ fmap try ps
-choice1 ps = case ps of
-    []   -> mzero
-    x:[] -> x
-    x:xs -> try x <|> choice1 xs
+-- choice1 ps = case ps of
+--     []   -> mzero
+--     x:[] -> x
+--     x:xs -> try x <|> choice1 xs
 parseMaybe p = try (fmap Just p) <|> return Nothing
 symbolToText (QSymbol s) = s
 parseFile p fname
@@ -244,6 +243,7 @@ instance Show Assoc where
     show AssocRight = "AssocRight"
 
 -- buildInfixParser :: b -> TextExpr a -> ParsecT String u Identity (TextExpr a)
+-- because buildExpressionParser doesn't handle similar operators well (like >> and >>=)
 buildInfixParser optable term =  fmap shuntingYard parseInfixTermsList where
     itTerm = fmap TERM term
     itOperator = fmap OPERATOR operator
@@ -263,8 +263,8 @@ buildInfixParser optable term =  fmap shuntingYard parseInfixTermsList where
         foldList = foldl f ([], [])
 
         -- f (ts, os) b | traceShow (length ts, os, b) False = undefined  -- DEBUG
-        f (terms,operators)  (TERM a)     = (a : terms, operators)
-        f (terms,[])         (OPERATOR a) = (terms    , [a])
+        f (terms,operators)        (TERM a)     = (a : terms, operators)
+        f (terms,[])               (OPERATOR a) = (terms    , [a])
         f (x:y:terms, o:operators) (OPERATOR a) = 
             if | prec_A < prec_O  -> f reduceTermOnly (OPERATOR a)
                | prec_A > prec_O  -> shift
@@ -274,14 +274,15 @@ buildInfixParser optable term =  fmap shuntingYard parseInfixTermsList where
                     otherwise              -> shift
           where
             -- 'Nothing' case can't happen because it won't parse
+            -- can happen when operators become user-definable
             Just (assoc_A, prec_A) = M.lookup a optable  
             Just (assoc_O, prec_O) = M.lookup o optable
             shift = (x:y:terms, a:o:operators)
-            reduce = (opAST o x y : terms, a:operators)
-            reduceTermOnly = (opAST o x y : terms, operators)
+            reduce = (opAST o y x : terms, a:operators)
+            reduceTermOnly = (opAST o y x : terms, operators)
         
         foldRemaining (terms, operators) = foldl reduce1 terms operators where
-            reduce1 (x:y:terms) o = opAST o x y : terms
+            reduce1 (x:y:terms) o = opAST o y x : terms
 
 -- EXPERIMENTAL
 -- requires adding any reserved names to 'reservedNames' in the Lexer

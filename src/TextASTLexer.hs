@@ -1,10 +1,10 @@
 -- {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
-module Lexer where
+module TextASTLexer where
 
 --
-import Prelude
+import           Prelude
 import           Control.Applicative     ((<|>))
 import qualified Text.Parsec.Token as P
 import           Text.Parsec.Language (emptyDef)
@@ -12,12 +12,12 @@ import qualified Text.Parsec.Char as Tpc
 import qualified Text.Parsec as Tp
 import qualified Data.Text as T
 import           Text.Parsec.Expr (Operator(..), Assoc(..))
-import Text.Parsec.Pos (newPos)
+import           Text.Parsec.Pos (newPos)
 import           Data.Functor.Identity (Identity)
 
-import AST 
+import           TextAST 
 import           Debug.Trace (trace)
-import Control.Monad (mzero)
+import           Control.Monad (mzero)
 
 
 nums = "0123456789"
@@ -101,8 +101,8 @@ equalP = lexsym "="
 commaSep = P.commaSep lexer
 commaSep1 = P.commaSep1 lexer
 semi = P.semi lexer
-semiSep = P.semiSep lexer
-semiSep1 = P.semiSep1 lexer
+semiSep p = Tp.sepEndBy p (lexsym ";")
+semiSep1 p = Tp.sepEndBy1 p (lexsym ";")
 parens = P.parens lexer
 braces = P.braces lexer
 brackets = P.brackets lexer

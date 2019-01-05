@@ -3,7 +3,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module AST where
+module TextAST where
 
 --
 import           Prelude         (Char, Bool, Int, Double, Maybe, Show, show, Functor, (++))

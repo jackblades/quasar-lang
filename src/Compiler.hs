@@ -2,14 +2,14 @@
 
 module Compiler where
 
-import Prelude hiding (maybe)
-import AST
+import           Prelude hiding (maybe)
+import           TextAST
 import           Control.Applicative     ((<|>))
 import qualified Text.Parsec.Token as P
 import qualified Text.Parsec as Tp
-import Lexer as L
-import Parser
-import Data.Text as T
+import           TextASTLexer as L
+import           TextASTParser
+import           Data.Text as T
 
 data ImportQ = ImportAs [T.Text] [T.Text]
              | FromImport [T.Text] [([T.Text], [T.Text])]

@@ -1,12 +1,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
 
-module Parser where
+module TextASTParser where
 
 --
 import           Prelude
-import           AST
-import           Lexer hiding (symbol)
+import           TextAST
+import           TextASTLexer hiding (symbol)
 import           Text.Parsec hiding (choice, char)
 import           Text.Parsec.Expr (buildExpressionParser, Operator(..), Assoc(..))
 import qualified Data.Text as T
@@ -29,7 +29,8 @@ opAST op = \a b ->
 opASTUnary op = \a -> 
     spanSrc a a $ QForm [noSrcOp op, a]
     
-
+-- TODO Add Logging 
+    -- Like each choice should report what point the parse failed
 --
 topLvl = opAST "=" <$> forms <*> (equalP *> whereExp)      -- f x y = whereExpr
 whereExp = do       -- expr where { a = fx, ... }
@@ -169,13 +170,13 @@ literal
 qstring = fmap QString text
 qint = fmap (QInt . fromInteger) int
 qfloat = fmap QFloat float 
--- qchar = Lexer.char '\\' *> fmap QChar anyChar
+-- qchar = TextASTLexer.char '\\' *> fmap QChar anyChar
 qchar = fmap QChar charLiteral 
 nil = lexsym "nil" *> return QNil
 qbool = fmap QBool bool
 
 keyword = choice1 [ macro_keyword, simple_keyword ]
-simple_keyword = Lexer.char ':' *> symbol
+simple_keyword = TextASTLexer.char ':' *> symbol
 macro_keyword = string "::" *> symbol
 
 symbol = lexeme 
@@ -188,7 +189,7 @@ symbol = lexeme
 simple_sym = qsymbol
 ns_symbol = do 
     ns <- ident 
-    Lexer.char '/' 
+    TextASTLexer.char '/' 
     sym <- qsymbol
     return $ mconcat [ns, T.pack "/", sym]
 

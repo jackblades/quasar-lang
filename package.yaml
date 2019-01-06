@@ -69,6 +69,7 @@ dependencies:
 - parsers
 # - compilation  -- needs to implement Applicative
 - bound
+- deriving-compat
 - unification-fd
 # - epic  # compile to C
 # - dhall

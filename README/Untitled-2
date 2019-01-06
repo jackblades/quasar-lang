@@ -1,21 +1,33 @@
 
+http://semantic-domain.blogspot.com/2015/03/new-draft-sound-and-complete.html
 
 
-- using categories as the basic primitive
-- using data-structures as the basic primitive
 
-- stack-based evaluation -- tree (call functions)
-- queue-based evaluation -- graph? (pop message -> process)
--- or is it actually depth-first vs breadth-first?
+- module system
+- parse -> ast -> macroexpand -> generate code
+- local modules, global typeclasses
+- structural typing
+- better support for lenses
+
+- dependency resolution
+- calls / calledby
+- refactoring (rename)
 
 
-- purely functional -- expressions
-- stateful objects -- smalltalk?
 
--- compile to categories?
 
-- stack is single-threaded
-- graph is multi-threaded?
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

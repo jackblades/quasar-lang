@@ -12,7 +12,6 @@ import qualified Text.Parsec.Char as Tpc
 import qualified Text.Parsec as Tp
 import qualified Data.Text as T
 import           Text.Parsec.Expr (Operator(..), Assoc(..))
-import           Text.Parsec.Pos (newPos)
 import           Data.Functor.Identity (Identity)
 
 import           TextAST 
@@ -59,11 +58,6 @@ ident = nonReserved $ do
     cs <- Tp.many (P.identLetter style)
     return (c:cs)
 
-
-src p = Src <$> Tp.getPosition <*> p <*> Tp.getPosition
-spanSrc x y e = Src (_beg x) e (_end y)
-noSrc e = Src noSrcPos e noSrcPos where noSrcPos = newPos "" (-1) (-1)  -- TODO
-
 --
 lexeme = P.lexeme lexer
 lexsym = P.symbol lexer
@@ -95,35 +89,16 @@ prefix  p       f = Prefix (p >> return f)
 postfix p       f = Postfix (p >> return f)
 
 --
-comma = P.comma lexer
-colon = P.colon lexer
 equalP = lexsym "="
-commaSep = P.commaSep lexer
-commaSep1 = P.commaSep1 lexer
+comma = P.comma lexer
+commaSep p = Tp.sepEndBy p comma
+commaSep1 p = Tp.sepEndBy1 p comma
+colon = P.colon lexer
+colonSep p = Tp.sepEndBy p colon
+colonSep1 p = Tp.sepEndBy1 p colon
 semi = P.semi lexer
-semiSep p = Tp.sepEndBy p (lexsym ";")
-semiSep1 p = Tp.sepEndBy1 p (lexsym ";")
+semiSep p = Tp.sepEndBy p semi
+semiSep1 p = Tp.sepEndBy1 p semi
 parens = P.parens lexer
 braces = P.braces lexer
 brackets = P.brackets lexer
-
--- qLiteral = src . fmap QLiteral
--- qForm = src . fmap QForm
--- qList = src . fmap QList
--- qVector = src . fmap QVector
--- qMap = src . fmap QMap
--- qSet = src . fmap QSet
--- qLambda = src .: fmap QLambda where (.:) = (.).(.)
--- qMetadata = src .: fmap QMetadata where (.:) = (.).(.)
--- qRegex = src . fmap QRegex
--- qVarQuote = src . fmap QVarQuote
--- qHostExpr = src .: fmap QHostExpr where (.:) = (.).(.)
--- qTag = src .: fmap QTag
--- qDiscard = src . fmap QDiscard
--- qDispatch = src .: fmap QDispatch where (.:) = (.).(.)
--- qDeref = src . fmap QDeref
--- qQuote = src . fmap QQuote
--- qBacktick = src . fmap QBacktick
--- qUnquote = src . fmap QUnquote
--- qUnquoteSplicing = src . fmap QUnquoteSplicing
--- qGenSym = src . fmap QGenSym

@@ -1,8 +1,7 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiWayIf #-}
 
 module TextASTParser where
-
+-- see https://github.com/Zankoku-Okuno/hexpr/blob/master/examples/etalisp/basic.el
+-- and https://personal.cis.strath.ac.uk/conor.mcbride/pub/Frank/test.fk
 --
 import           Prelude
 import           TextAST
@@ -31,6 +30,10 @@ opASTUnary op = \a ->
     
 -- TODO Add Logging 
     -- Like each choice should report what point the parse failed
+-- TODO ternary op for maybe / either
+-- TODO if / let / case
+-- TODO multimethods, conditions, deeplazy
+
 --
 topLvl = opAST "=" <$> forms <*> (equalP *> whereExp)      -- f x y = whereExpr
 whereExp = do       -- expr where { a = fx, ... }
@@ -39,11 +42,11 @@ whereExp = do       -- expr where { a = fx, ... }
         Nothing -> return lhs
         Just _  -> do
              let binding = (,) <$> forms <*> (equalP *> whereExp)
-             rhs <- src $ fmap QMap $ braces (sepEndBy binding comma)
+             rhs <- qMap $ braces (commaSep binding)
              return $ opAST "where" lhs rhs
 
 -- expr starts here
-form :: ParsecT String u Identity (TextExpr a)
+form :: Parser (Src a)
 form = buildInfixParser bin_optable forms       -- defines infix application
 
 bin_optable = M.fromList $ descendingPrec ops where
@@ -93,7 +96,7 @@ bin_optable = M.fromList $ descendingPrec ops where
         , [ binaryOp "::" AssocRight ]
       ]
 
-forms  = src $ fmap QForm $ many1 term     -- defines prefix application (f a b ...)
+forms  = qForm $ many1 term     -- defines prefix application (f a b ...)
 term =
     choice (fmap parsePrefix pre_optable) <|> term2
   where
@@ -137,9 +140,9 @@ term2 = choice1 $ productDef <> prim where    -- defines the primitives
 
     qprod beg p end f = lexsym beg *> src (fmap f p) <* lexsym end
     -- 
-    cforms = sepEndBy form comma
+    cforms = commaSep form
     field = (,) <$> term <*> (colon *> form)
-    cfields = sepEndBy field comma
+    cfields = commaSep field
 
 --
 lambda = src $ do
@@ -150,9 +153,9 @@ lambda = src $ do
     return $ QLambda args body
 
 gensym
-    = (src $ fmap (QLiteral . QGensym) $ qsymbol) <* lexsym "#"
+    = qGensym qsymbol <* lexsym "#"
 --
-literal :: ParsecT String u Identity (TextExpr a)
+literal :: Parser (Src a)
 literal
     = src 
     $ fmap QLiteral 
@@ -218,8 +221,8 @@ qsymbol = ident -- identifier eats spaces
 
 
 --
-choice1 = choice
 choice ps = foldr (<|>) mzero $ fmap try ps
+choice1 = choice
 -- choice1 ps = case ps of
 --     []   -> mzero
 --     x:[] -> x

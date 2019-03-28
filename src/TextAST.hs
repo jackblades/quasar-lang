@@ -5,11 +5,13 @@ module TextAST where
 --
 import           Prelude
 import           Control.Monad (ap)
+import           Control.Applicative (liftA2)
 import           Data.Functor.Identity (Identity)
-import           Data.ByteString (ByteString)
-import           Data.Map        (Map)
-import           Data.IntMap     as IM
 import           Data.Text       (Text)
+import qualified Data.ByteString as B (ByteString)
+import qualified Data.Map as M
+import qualified Data.IntMap as IM
+import qualified Data.List as L
 import           Text.Parsec     as Tp
 import           Text.Parsec.Pos (newPos)
 import           Bound
@@ -18,6 +20,8 @@ import           Data.Foldable
 import           Data.Traversable
 import           Data.Eq.Deriving (deriveEq1)      -- these two are from the
 import           Text.Show.Deriving (deriveShow1)  -- deriving-compat package
+
+import           Util
 
 data Literal
     = QNil
@@ -34,12 +38,16 @@ data Literal
     | QGensym                   Text
     deriving (Eq, Show)
 
+type Label = Text
+type BLabel = Int
+type Scoped a = Scope BLabel Src a
+
 data TextAST a
     = QLiteral                  Literal
     | QForm                     [Src a]    
     | QList                     [Src a]
     | QVector                   [Src a]
-    -- | QMap                      [(Src a, Src a)]
+    | QMap                      (M.Map Label (Scoped a))
     | QSet                      [Src a]
     | QDeref                    (Src a)
     | QQuote                    (Src a)
@@ -51,7 +59,7 @@ data TextAST a
     | QDo                       [Src a]    
     --
     | QVar                      a
-    | QLambda                   (Scope () Src a)
+    | QLambda                   [Label] (Scoped a)
     -- deriving (Eq, Show, Functor, Foldable, Traversable)
 
 data Src a
@@ -83,13 +91,14 @@ deriveShow1 ''Src
 instance Applicative Src where
     pure = noSrc . QVar
     (<*>) = ap
+
 instance Monad Src where
     return = pure
 
     x >>= f = case _expr x of
         QVar             a -> f a
-        QLambda          e -> x { _expr = QLambda          (e >>>= f) }
-        -- QMap          a -> x { _expr = QMap             (fmap (>>= f) a) }
+        QLambda     args e -> x { _expr = QLambda     args (e >>>= f) }
+        QMap             a -> x { _expr = QMap             (fmap (>>>= f) a) }
         
         QLiteral         _ -> x >>= f
         QForm            a -> x { _expr = QForm            (fmap (>>= f) a) }
@@ -130,14 +139,23 @@ qLiteral         = src . fmap QLiteral
 qForm            = src . fmap QForm
 qList            = src . fmap QList
 qVector          = src . fmap QVector
--- qMap             = src . fmap QMap
 qSet             = src . fmap QSet
--- qLambda          = src .: fmap . QLambda
 qDeref           = src . fmap QDeref
 qQuote           = src . fmap QQuote
 qBacktick        = src . fmap QBacktick
 qUnquote         = src . fmap QUnquote
 qUnquoteSplicing = src . fmap QUnquoteSplicing
 
-f .: g = \ x y -> f (g x y)
-infixr 9 .:
+qMap :: [(Label, Src Label)] -> TextAST Label
+qMap pairs = do
+    let vars = fmap fst pairs
+    let map = M.fromList pairs
+    QMap $ fmap (abstract (`L.elemIndex` vars)) map
+
+qLambda :: Parser [Label] -> Parser (Src Label) -> Parser (Src Label)
+-- qLambda          = src .: liftA2 (QLambda .: abstract)
+qLambda          = \ v b -> src $ do
+                        vars <- v
+                        body <- b
+                        return $ QLambda vars 
+                                    $ abstract (`L.elemIndex` vars) body

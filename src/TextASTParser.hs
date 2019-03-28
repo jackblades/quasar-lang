@@ -6,13 +6,15 @@ module TextASTParser where
 import           Prelude
 import           TextAST
 import           TextASTLexer hiding (symbol)
-import           Text.Parsec hiding (choice, char)
+import           Text.Parsec hiding (choice, char, label)
 import           Text.Parsec.Expr (buildExpressionParser, Operator(..), Assoc(..))
 import qualified Data.Text as T
 
+import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
 
+import           Bound
 import           Data.List (sort)
 import           Control.Applicative (liftA2)
 import           Data.Monoid ((<>))
@@ -28,6 +30,8 @@ opAST op = \a b ->
 opASTUnary op = \a -> 
     spanSrc a a $ QForm [noSrcOp op, a]
     
+label = text
+
 -- TODO Add Logging 
     -- Like each choice should report what point the parse failed
 -- TODO ternary op for maybe / either
@@ -41,12 +45,12 @@ whereExp = do       -- expr where { a = fx, ... }
     parseMaybe (lexsym "where") >>= \case
         Nothing -> return lhs
         Just _  -> do
-             let binding = (,) <$> forms <*> (equalP *> whereExp)
+             let binding = (,) <$> text <*> (equalP *> whereExp)
              rhs <- qMap $ braces (commaSep binding)
              return $ opAST "where" lhs rhs
 
 -- expr starts here
-form :: Parser (Src a)
+form :: Parser (Src Label)
 form = buildInfixParser bin_optable forms       -- defines infix application
 
 bin_optable = M.fromList $ descendingPrec ops where
@@ -120,7 +124,7 @@ term2 = choice1 $ productDef <> prim where    -- defines the primitives
         , qprod "(" cforms ")" (\x -> if length x == 1 then _expr (head x) else QList x)
         , qprod "[" cforms "]" QVector
         , qprod "{|" qdo "|}" QDo
-        , qprod "{" qmap "}" QMap
+        , qprod "{" qmap "}" qMap
         , qprod "#{" cforms "}" QSet
         , qprod ":{" qraw "}" (QLiteral . QRaw . T.pack)
         ]
@@ -129,10 +133,7 @@ term2 = choice1 $ productDef <> prim where    -- defines the primitives
         assign = opAST "=" <$> forms <*> (equalP *> whereExp)
         bind   = opAST "<-" <$> forms <*> (lexsym "<-" *> whereExp)
 
-    qmap = try cfields <|> withIndex cforms where
-        withIndex = fmap index
-        index = zip (fmap indexConstructor [0 .. ])
-        indexConstructor = noSrc . QLiteral . QInt
+    qmap = try cfields
 
     qraw = many1 $ escapedEndBrace <|> others where
         escapedEndBrace = try (lexsym "\\}" *> pure '}')
@@ -141,7 +142,7 @@ term2 = choice1 $ productDef <> prim where    -- defines the primitives
     qprod beg p end f = lexsym beg *> src (fmap f p) <* lexsym end
     -- 
     cforms = commaSep form
-    field = (,) <$> term <*> (colon *> form)
+    field = (,) <$> label <*> (colon *> form)
     cfields = commaSep field
 
 --
@@ -150,12 +151,12 @@ lambda = src $ do
     args <- many1 identifier
     lexsym "->"
     body <- whereExp
-    return $ QLambda args body
+    return $ QLambda (abstract (`L.elem` args) body)
 
 gensym
     = qGensym qsymbol <* lexsym "#"
 --
-literal :: Parser (Src a)
+literal :: Parser (Src Label)
 literal
     = src 
     $ fmap QLiteral 
@@ -265,7 +266,7 @@ buildInfixParser optable term =  fmap shuntingYard parseInfixTermsList where
 
     -- runs the shunting yard algorithm to parse the list into a tree
     shuntingYard xs = head . foldRemaining . foldList $ xs where
-        foldList = foldl f ([], [])
+        foldList = foldl' f ([], [])
 
         -- f (ts, os) b | traceShow (length ts, os, b) False = undefined  -- DEBUG
         f (terms,operators)        (TERM a)     = (a : terms, operators)
@@ -286,7 +287,7 @@ buildInfixParser optable term =  fmap shuntingYard parseInfixTermsList where
             reduce = (opAST o y x : terms, a:operators)
             reduceTermOnly = (opAST o y x : terms, operators)
         
-        foldRemaining (terms, operators) = foldl reduce1 terms operators where
+        foldRemaining (terms, operators) = foldl' reduce1 terms operators where
             reduce1 (x:y:terms) o = opAST o y x : terms
 
 -- EXPERIMENTAL
